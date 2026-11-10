@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/config/orchestration-policy.schema.json",
+  "title": "OrchestrationPolicy",
+  "description": "Canonical routing contract shared by the standalone plugin orchestrator and the harness orchestration planner. Agent responsibilities stay in the agent files.",
+  "type": "object",
+  "required": ["schema_version", "kind", "version", "orchestrator", "limits", "specialists", "categories"],
+  "additionalProperties": false,
+  "$defs": {
+    "Id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" },
+    "Signals": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "pattern": "^[^A-Z]+$" } },
+    "Texts": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "Step": {
+      "type": "object",
+      "required": ["agent", "purpose"],
+      "additionalProperties": false,
+      "properties": {
+        "agent": { "$ref": "#/$defs/Id" },
+        "purpose": { "type": "string", "minLength": 1 },
+        "optional": { "type": "boolean", "default": false },
+        "when": { "type": "string", "minLength": 1 },
+        "signals": { "$ref": "#/$defs/Signals" },
+        "after": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } }
+      },
+      "if": { "properties": { "optional": { "const": true } }, "required": ["optional"] },
+      "then": { "required": ["when", "signals"] }
+    }
+  },
+  "properties": {
+    "schema_version": { "$ref": "../contracts/common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "OrchestrationPolicy" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "orchestrator": {
+      "type": "object",
+      "required": ["id", "path", "command"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/Id" },
+        "path": { "type": "string", "minLength": 1, "description": "Agent file of the standalone orchestrator, relative to the pack root." },
+        "command": { "$ref": "#/$defs/Id" },
+        "skills": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } }
+      }
+    },
+    "limits": {
+      "type": "object",
+      "required": ["max_delegations", "max_attempts_per_step"],
+      "additionalProperties": false,
+      "properties": {
+        "max_delegations": { "type": "integer", "minimum": 1, "maximum": 20 },
+        "max_attempts_per_step": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "max_clarifying_questions": { "type": "integer", "minimum": 0, "maximum": 10 }
+      }
+    },
+    "specialists": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "signals", "route"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "#/$defs/Id" },
+          "title": { "type": "string", "minLength": 1 },
+          "signals": { "$ref": "#/$defs/Signals" },
+          "route": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Step" } },
+          "requires_any": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } },
+          "supplementary_skills": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/Id" } }
+        }
+      }
+    },
+    "step_constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "description"],
+        "additionalProperties": false,
+        "properties": { "id": { "$ref": "#/$defs/Id" }, "description": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "completion_criteria": { "$ref": "#/$defs/Texts" },
+    "clarify_when": { "$ref": "#/$defs/Texts" },
+    "failure_policy": { "$ref": "#/$defs/Texts" },
+    "security_boundaries": { "$ref": "#/$defs/Texts" }
+  }
+}

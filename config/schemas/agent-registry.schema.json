@@ -22,7 +22,9 @@
           "read_paths": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Sub-folders of the plugin an agent may read at run time. Default: the whole plugin directory." },
           "agent_policy": { "type": "string", "minLength": 1, "description": "PluginSecurityPolicy file (relative to the plugin root) whose per-agent write modes the harness enforces on this plugin's agents. It can only remove capabilities." },
           "load_hooks": { "type": "boolean", "default": true, "description": "false: the plugin's own hooks are not loaded in harness sessions (the harness enforces agent_policy itself). Requires agent_policy." },
-          "preload_skills": { "type": "boolean", "default": false, "description": "true: the harness injects the full SKILL.md of each skill an agent registers from this plugin into the agent's instructions (the CLI does not preload AgentDefinition.skills for a session run with --agent; verified with CLI 2.1.317)." }
+          "preload_skills": { "type": "boolean", "default": false, "description": "true: the harness injects the full SKILL.md of each skill an agent registers from this plugin into the agent's instructions (the CLI does not preload AgentDefinition.skills for a session run with --agent; verified with CLI 2.1.317)." },
+          "optional": { "type": "boolean", "default": false, "description": "true: an optional integration. The default `full` profile still requires it; the `pack` profile excludes it explicitly, with its agents, skills and the workflows that use them, and reports each exclusion." },
+          "description": { "type": "string", "minLength": 1, "description": "What the plugin provides; shown when it is missing or excluded." }
         }
       }
     },

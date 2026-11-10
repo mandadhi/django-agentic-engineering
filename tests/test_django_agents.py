@@ -115,9 +115,16 @@ def test_all_nine_agents_registered_in_the_pack_plugin(registry: HarnessRegistry
         assert agent.path.is_file() and agent.enabled
 
 
+#: Phase 6: the plugin's orchestrator lives in agents/ too, but it is not a registered specialist; the harness
+#: plays that role with core/orchestration.py (see tests/test_orchestration.py).
+ORCHESTRATOR = "django-orchestrator"
+
+
 def test_every_agent_file_is_registered(registry: HarnessRegistry) -> None:
     files = {p.stem for p in AGENTS_DIR.glob("*.md") if not p.stem.isupper()}   # skip README.md
-    assert files == set(EXPECTED)
+    assert files == set(EXPECTED) | {ORCHESTRATOR}
+    files.discard(ORCHESTRATOR)
+    assert ORCHESTRATOR not in registry.agents
     assert {registry.agents.get(i).path.name for i in files} == {f"{i}.md" for i in files}
 
 

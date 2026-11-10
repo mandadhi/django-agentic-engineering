@@ -239,7 +239,12 @@ def test_all_nine_agents_discovered_from_the_plugin(pack_registry: HarnessRegist
     pack = [a for a in pack_registry.agents if a.plugin == PLUGIN]
     assert sorted(a.id for a in pack) == AGENT_IDS and len(pack) == len({a.id for a in pack}) == 9
     manifest = json.loads(pack_plugin(pack_registry).manifest.read_text(encoding="utf-8"))
-    assert sorted((HARNESS_HOME / p).resolve() for p in manifest["agents"]) == sorted(a.path for a in pack)
+    # Phase 6: the manifest also lists the plugin-only orchestrator, which the harness does not register
+    # (core/orchestration.py plays that role there; see tests/test_orchestration.py).
+    orchestrator = (HARNESS_HOME / "agents" / "django-orchestrator.md").resolve()
+    listed = sorted((HARNESS_HOME / p).resolve() for p in manifest["agents"])
+    assert orchestrator in listed and "django-orchestrator" not in pack_registry.agents
+    assert [p for p in listed if p != orchestrator] == sorted(a.path for a in pack)
 
 
 @pytest.mark.parametrize("agent_id", AGENT_IDS)

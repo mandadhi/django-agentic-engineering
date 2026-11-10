@@ -147,6 +147,17 @@ class AgentRunner:
         return self.manager.start_execution(definition["id"], {}, {WORKSPACE_KEY: str(self._workspace(workspace))},
                                             definition=definition)
 
+    def start_definition(self, definition: Mapping[str, Any], *, workspace: str | Path,
+                         metadata: Mapping[str, Any] | None = None) -> Execution:
+        """Start an ad-hoc multi-stage definition (e.g. an orchestrated route) on ``workspace``.
+
+        Same path as :meth:`start_agent`: the ExecutionManager validates the definition against the
+        workflow contract and the registry (unknown or disabled agents are refused) and persists it.
+        """
+        meta = dict(metadata or {})
+        meta[WORKSPACE_KEY] = str(self._workspace(workspace))
+        return self.manager.start_execution(definition["id"], {}, meta, definition=definition)
+
     def workspace_of(self, execution: Execution) -> Path:
         value = execution.metadata.get(WORKSPACE_KEY)
         if not value:

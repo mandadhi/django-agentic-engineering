@@ -1,6 +1,6 @@
 [project]
 name = "django-agentic-engineering"
-version = "0.2.0"
+version = "0.3.0"
 description = "Django agentic engineering harness: configuration, contracts, registry, context, execution state and agent execution through the Claude Agent SDK."
 requires-python = ">=3.11"
 dependencies = [

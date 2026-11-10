@@ -20,6 +20,7 @@ configs:
   workflow: config/workflow-config.yaml
   evaluation: config/evaluation-config.yaml
   security: config/security-config.yaml
+  orchestration: config/orchestration-policy.yaml   # canonical routing contract, shared with the plugin
 
 storage:
   backend: sqlite                # only sqlite in Phase 1; the store sits behind ExecutionStore

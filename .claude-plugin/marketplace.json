@@ -8,7 +8,7 @@
     {
       "name": "django-engineering",
       "source": "./",
-      "description": "Nine Django agents, nine /django-* commands, twelve Django skills and twelve engineering rules, with output templates, shared references and a fail-closed security guard.",
+      "description": "A Django orchestrator and nine specialist agents, nine /django-* commands plus /orchestrate, twelve Django skills and twelve engineering rules, with output templates, shared references and a fail-closed security guard.",
       "category": "backend"
     }
   ]

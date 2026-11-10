@@ -26,6 +26,11 @@ result. How the work is done stays in the agent; Django knowledge stays in the s
 | [/django-optimize](django-optimize.md) | `django-performance-agent` | targeted optimisations and tests | baseline → approval (or `--apply`) → re-measure |
 | [/django-document](django-document.md) | `django-documentation-agent` | documentation files only | none with `--dry-run` |
 | [/django-review](django-review.md) | `django-code-review-agent` | never | read-only |
+| [/orchestrate](orchestrate.md) (Phase 6) | `django-orchestrator`, then the specialists it selects | only through those specialists | each specialist's own gate |
+
+`/orchestrate` is the deterministic entry point to the orchestrator. If the orchestrator cannot
+spawn subagents where it runs, it returns a ROUTING PLAN. The command then has the main session
+run that plan with the same limits (see [docs/orchestration.md](../docs/orchestration.md)).
 
 ## Output templates (Phase 3E)
 

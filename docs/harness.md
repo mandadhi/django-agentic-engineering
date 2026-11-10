@@ -15,11 +15,18 @@ The standalone plugin is documented in [plugin.md](plugin.md).
 Commands below use the Windows virtual-environment path `.venv/Scripts/python`; on Linux and macOS
 use `.venv/bin/python`.
 
-> **Layout requirement.** The shipped registries reuse agents and skills from a parent repository's
+> **Layout and profiles.** The shipped registries reuse agents and skills from a parent repository's
 > `plugins/security`, `plugins/database`, `plugins/api` and `plugins/pr-automation`
-> (`paths.repo_root: ../..` in `config/framework-config.yaml`). In a standalone checkout of this
-> repository those directories do not exist, so `python -m core.cli validate` and every other
-> `core.cli` command fail on those entries. See [Parent repository layout](#parent-repository-layout).
+> (`paths.repo_root: ../..` in `config/framework-config.yaml`).
+>
+> Since Phase 6 these four are registered as **optional** integrations:
+> - The default `full` profile still requires them. In a standalone checkout every `core.cli`
+>   command fails on those entries, with an error that says how to recover.
+> - `--profile pack` (or `DAE_HARNESS_PROFILE=pack`) excludes them explicitly and reports each
+>   exclusion.
+>
+> See [Parent repository layout](#parent-repository-layout) and
+> [orchestration.md](orchestration.md#harness-setup-and-profiles).
 
 ## Requirements
 
@@ -705,7 +712,10 @@ RunRecords hold no prompt, objective, inputs, agent output or conversation.
 ## CLI
 
 ```text
-python -m core.cli validate | list {agents,skills,workflows}
+python -m core.cli [--profile full|pack] validate | list {agents,skills,workflows}
+python -m core.cli orchestrate plan "<task>" [--category ID] [--with AGENT] [--without AGENT] [--json]
+python -m core.cli orchestrate run  "<task>" --workspace DIR [--category ID] [--with/--without AGENT]
+        [--timeout S] [--approve deny|interactive] [--db PATH]     # Phase 6, see orchestration.md
 python -m core.cli agent list
 python -m core.cli agent inspect <agent> [--json]        # effective tools, denies, skills, plugins, rules
 python -m core.cli agent run <agent> --objective TEXT --workspace DIR
@@ -720,8 +730,9 @@ python -m core.cli execution approve <id> <stage> --approver NAME
 python -m core.cli execution reject  <id> <stage> --reviewer NAME --reason R
 ```
 
-`agent run` is a single-stage ad-hoc workflow. Its definition is stored with the
-execution, so it is resumable like any other. Every command goes through the same
+`agent run` is a single-stage ad-hoc workflow. `orchestrate run` (Phase 6) is a multi-stage
+ad-hoc workflow planned from `config/orchestration-policy.yaml`. Both definitions are stored with
+the execution, so they are resumable like any other. Every command goes through the same
 `AgentRunner`, `ExecutionManager` and security hooks.
 
 | Exit code | Meaning |
@@ -845,14 +856,24 @@ two levels up:
 ```
 
 Those plugins are **not** part of this repository. The Django Engineering Pack itself resolves from
-the harness installation (`base: harness`) and does not depend on this layout, but registry
-validation loads every entry, so without the parent plugins no `core.cli` command runs. The
-standalone Claude Code plugin is unaffected.
+the harness installation (`base: harness`) and does not depend on this layout.
+
+Registry validation loads every entry, so under the default `full` profile no `core.cli` command
+runs without the parent plugins. Since Phase 6 they are registered `optional: true` with a
+`description`:
+
+- `--profile pack` excludes them explicitly, together with their agents, skills, the workflows
+  that use them, and the security-config overrides and evaluation targets that name them.
+  `validate` lists every exclusion.
+- The security rules for the remaining agents are unchanged.
+
+The standalone Claude Code plugin is unaffected.
 
 - The registries reuse reviewed agents and skills from `plugins/security`,
   `plugins/database`, `plugins/api` and `plugins/pr-automation`, by path. Nothing is copied.
 - Projects Explorer scans `projects/*/agents/*.md`, every `SKILL.md`, and
-  `projects/*/hooks/*.json`. This folder lists 9 agents (`agents/*.md`) and 24 skill
+  `projects/*/hooks/*.json`. This folder lists 10 agents (`agents/*.md`: nine specialists and,
+  since Phase 6, the plugin's orchestrator) and 24 skill
   packages: 12 skills and the 12 rules, which the Explorer shows as skills because they share
   the `SKILL.md` format. Its READMEs are skipped because their names are ALL-CAPS. The Explorer
   does not list commands, templates or shared references, because it does not scan those folders.

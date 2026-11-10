@@ -12,6 +12,20 @@ Harness-local agent definitions go here, one `<agent-id>.md` per agent. Each fil
 Claude Code agent frontmatter (`name`, `description`, `tools`, `model`) plus the inventory
 fields (`project`, `abstract`, `sdlc_phase`, `tech_stack`, `domain`).
 
+## Django Orchestrator (Phase 6)
+
+[django-orchestrator](django-orchestrator.md) is the plugin's user-facing entry point. It is not a
+tenth specialist. It classifies a request, selects the smallest route of the specialists below,
+briefs and sequences them, and reconciles their results.
+
+- **Read-only.** The plugin guard lets it delegate only to the nine specialists.
+- **Plugin only.** It is not in `config/agent-registry.yaml`; the harness plays this role with
+  `core/orchestration.py`.
+- **Generated routing.** Its routing section is generated from `config/orchestration-policy.yaml`
+  (`python -m plugin_packaging build`); do not edit it by hand.
+
+See [docs/orchestration.md](../docs/orchestration.md).
+
 ## Django Engineering Agents (Phase 3B)
 
 Each agent is a thin role definition. Django knowledge lives in the skills it lists, which

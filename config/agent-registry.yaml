@@ -34,10 +34,18 @@ kind: AgentRegistry
 #   (measured, CLI 2.1.317). Every agent runs under the harness name dae-<id>, so a plugin's
 #   same-named agent file can never replace the harness definition.
 plugins:
-  - { id: security, path: plugins/security, preload_skills: true }
-  - { id: database, path: plugins/database, preload_skills: true }
-  - { id: api, path: plugins/api, preload_skills: true }
-  - { id: pr-automation, path: plugins/pr-automation, preload_skills: true }
+# optional (Phase 6): the four parent-repository plugins are optional integrations. The default `full`
+#   profile still requires them, exactly as before. The `pack` profile (--profile pack) excludes them
+#   explicitly with their agents, skills and the workflows that use them, and reports each exclusion.
+#   django-engineering is mandatory in every profile.
+  - { id: security, path: plugins/security, preload_skills: true, optional: true,
+      description: "the reused security agents (threat-modeler, security-sast-engineer, secrets-scanner, security-auditor) and the security-review workflow" }
+  - { id: database, path: plugins/database, preload_skills: true, optional: true,
+      description: "the reused db-schema-designer and db-migration-engineer agents" }
+  - { id: api, path: plugins/api, preload_skills: true, optional: true,
+      description: "the reused api-contract-designer agent" }
+  - { id: pr-automation, path: plugins/pr-automation, preload_skills: true, optional: true,
+      description: "the reused pr-reviewer agent" }
   # Django Engineering Pack (Phase 5). The harness root is the plugin root, so `base: harness`
   # resolves it from the harness installation, wherever this project is checked out.
   # read_paths: what its agents may read at run time (never config/, var/ or .venv/).

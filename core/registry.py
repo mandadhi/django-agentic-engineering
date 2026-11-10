@@ -8,7 +8,7 @@ problem found (schema, version, missing references) in one exception.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Generic, Iterator, Mapping, TypeVar
 
@@ -123,6 +123,22 @@ def _with_skill_frontmatter(skill: SkillSpec) -> SkillSpec:
     return replace(skill, description=str(meta["description"]).strip())
 
 
+def _exclude_workflows(config: HarnessConfig, workflows: dict[str, WorkflowDefinition]
+                       ) -> tuple[dict[str, WorkflowDefinition], HarnessConfig, tuple[str, ...]]:
+    """Under a profile that excluded agents, also exclude the workflows that use them (and their evaluation
+    targets), and record them. In the ``full`` profile nothing is excluded and a missing agent stays an error."""
+    gone = {e.split(":", 1)[1] for e in config.excluded if e.startswith("agent:")}
+    if not gone:
+        return workflows, config, ()
+    dropped = tuple(sorted(wid for wid, wf in workflows.items() if any(s.agent_id in gone for s in wf.stages)))
+    kept = {wid: wf for wid, wf in workflows.items() if wid not in dropped}
+    targets = tuple(t for t in config.evaluation.targets
+                    if t.type == "agent" or t.id.split("/", 1)[0] not in dropped)
+    config = replace(config, evaluation=replace(config.evaluation, targets=targets),
+                     excluded=config.excluded + tuple(f"workflow:{w}" for w in dropped))
+    return kept, config, dropped
+
+
 @dataclass(frozen=True)
 class HarnessRegistry:
     config: HarnessConfig
@@ -130,12 +146,16 @@ class HarnessRegistry:
     skills: SkillRegistry
     workflows: WorkflowRegistry
     contracts: ContractValidator
+    #: Workflows the profile excluded because a stage uses an excluded agent (``pack`` profile).
+    excluded_workflows: tuple[str, ...] = field(default=())
 
     @classmethod
-    def load(cls, root: Path | str, framework_file: str = DEFAULT_FRAMEWORK_FILE) -> "HarnessRegistry":
-        config = load_config(root, framework_file)
+    def load(cls, root: Path | str, framework_file: str = DEFAULT_FRAMEWORK_FILE, *,
+             profile: str | None = None) -> "HarnessRegistry":
+        config = load_config(root, framework_file, profile=profile)
         contracts = ContractValidator(config.framework.contracts_dir)
         workflows, labels, issues = discover_workflows(config.workflow, contracts, config.framework.root)
+        workflows, config, excluded = _exclude_workflows(config, workflows)
         issues += validate_references(config, workflows, labels)
         if issues:
             raise ReferenceValidationError("Configuration references are invalid", issues)
@@ -145,6 +165,7 @@ class HarnessRegistry:
             skills=SkillRegistry({s.id: _with_skill_frontmatter(s) for s in config.skills}),
             workflows=WorkflowRegistry(workflows),
             contracts=contracts,
+            excluded_workflows=excluded,
         )
         log.info("registry.loaded", extra={"agents": len(registry.agents), "skills": len(registry.skills),
                                            "workflows": len(registry.workflows)})

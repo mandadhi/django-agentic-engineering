@@ -137,8 +137,8 @@ def _check_plugins(config: HarnessConfig) -> list[ValidationIssue]:
             continue
         if not plugin.path.is_dir():
             issues.append(ValidationIssue(label, f"{where}/path", f"plugin '{plugin.id}': directory not found: "
-                                                                   f"{plugin.rel_path} (base: {plugin.base})",
-                                          "missing-path"))
+                                                                   f"{plugin.rel_path} (base: {plugin.base})"
+                                          + _missing_plugin_hint(plugin), "missing-path"))
             continue
         if not plugin.manifest.is_file():
             issues.append(ValidationIssue(label, f"{where}/path", f"plugin '{plugin.id}': no .claude-plugin/plugin.json "
@@ -164,6 +164,37 @@ def _check_plugins(config: HarnessConfig) -> list[ValidationIssue]:
                                               f"plugin '{plugin.id}': read path '{rel}' not found", "missing-path"))
         issues += _check_agent_policy(config, plugin, label, where)
     return issues
+
+
+def _missing_plugin_hint(plugin: PluginSpec) -> str:
+    """How to recover from a missing plugin: mandatory plugins must be provided; optional ones can be excluded."""
+    provides = f" It provides {plugin.description}." if plugin.description else ""
+    if plugin.optional:
+        return (f".{provides} This is an optional integration: provide it at that path, or exclude it explicitly "
+                "with the 'pack' profile (--profile pack or DAE_HARNESS_PROFILE=pack), which also excludes its "
+                "agents, skills and the workflows that use them")
+    return f".{provides} This plugin is mandatory for the harness; restore it at that path"
+
+
+def _check_orchestration(config: HarnessConfig) -> list[ValidationIssue]:
+    """The orchestration contract references only registered pack specialists, skills and earlier steps."""
+    policy = config.orchestration
+    if policy is None:
+        return []
+    from .orchestration import policy_issues
+
+    label = config.label("orchestration")
+    by_id = {a.id: a for a in config.agents}
+    pack = {by_id[s].plugin for s in policy.specialists if s in by_id and by_id[s].plugin}
+    plugin = next((p for p in config.plugins if p.id in pack), None) if len(pack) == 1 else None
+    issues: list[ValidationIssue] = []
+    if plugin is None:
+        issues.append(ValidationIssue(label, "specialists", "specialists must all be registered agents of one "
+                                      f"plugin (found plugins: {sorted(pack) or 'none'})", "unknown-agent"))
+    specialists = {a.id for a in config.agents if plugin is not None and a.plugin == plugin.id}
+    orchestrator_file = (plugin.path / policy.orchestrator_path).resolve() if plugin is not None else None
+    return issues + policy_issues(policy, label, agent_ids=by_id, specialist_ids=specialists,
+                                  skill_ids={s.id for s in config.skills}, orchestrator_file=orchestrator_file)
 
 
 def _check_agent_policy(config: HarnessConfig, plugin: PluginSpec, label: str, where: str) -> list[ValidationIssue]:
@@ -296,4 +327,5 @@ def validate_references(config: HarnessConfig, workflows: Mapping[str, WorkflowD
         issues += _check_workflow(workflow, label, agents)
     issues += _check_security(config, agent_ids)
     issues += _check_evaluation(config, agent_ids, workflows)
+    issues += _check_orchestration(config)
     return issues

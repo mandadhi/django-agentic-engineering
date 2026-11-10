@@ -39,6 +39,15 @@ agents:
   django-testing-agent: workspace-write
   django-performance-agent: workspace-write
 
+# The orchestrator (Phase 6) is not a registered specialist, so it is kept out of `agents` above (the
+# harness checks that `agents` names exactly its registered pack agents). It must be read-only: it reads
+# the project and delegates; only the specialists change files, each within its own write mode. Its
+# delegation allowlist is derived from `specialists` in config/orchestration-policy.yaml, and the guard
+# denies any Agent call by the orchestrator to another target (itself included).
+orchestrator:
+  id: django-orchestrator
+  mode: read-only
+
 # Paths (relative to the project directory) the documentation agent may write. These follow
 # agents/django-documentation-agent.md ("docs/, README*, *.md") plus the documentation formats
 # and tool configs it names (Sphinx, MkDocs). Plain *.txt is excluded: requirements*.txt is code.

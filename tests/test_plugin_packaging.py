@@ -142,7 +142,9 @@ def test_cli_validate_accepts_the_plugin() -> None:
 def test_agent_discovery(registry: HarnessRegistry) -> None:
     listed = [Path(p).stem for p in manifest()["agents"]]
     local = sorted(a.id for a in registry.agents if a.plugin == "django-engineering")
-    assert sorted(listed) == local == AGENT_IDS and len(listed) == 9
+    assert "django-orchestrator" in listed and "django-orchestrator" not in local     # Phase 6: plugin-only
+    specialists = [a for a in listed if a != "django-orchestrator"]
+    assert sorted(specialists) == local == AGENT_IDS and len(specialists) == 9 and len(listed) == 10
     for agent_id in listed:
         assert agent_meta(agent_id)["name"] == agent_id
 
@@ -155,7 +157,7 @@ def test_readmes_are_never_loaded_as_components() -> None:
 
 def test_command_discovery() -> None:
     listed = [Path(p).stem for p in manifest()["commands"]]
-    assert sorted(listed) == COMMAND_IDS and len(listed) == 9
+    assert sorted(c for c in listed if c != "orchestrate") == COMMAND_IDS and len(listed) == 10   # + /orchestrate
 
 
 def test_skill_discovery(registry: HarnessRegistry) -> None:

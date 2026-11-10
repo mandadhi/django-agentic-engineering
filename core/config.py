@@ -15,12 +15,13 @@ Cross-file references (agent → skill, stage → agent, ...) are checked later 
 
 from __future__ import annotations
 
+import os
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 import yaml
 
@@ -29,11 +30,24 @@ from .contracts import SchemaSet
 from .errors import ConfigError, ConfigVersionError, ValidationIssue
 from .log import get_logger
 
+if TYPE_CHECKING:
+    from .orchestration import OrchestrationPolicy
+
 log = get_logger(__name__)
 
 SUPPORTED_SCHEMA_VERSIONS: frozenset[str] = frozenset({"1.0"})
 DEFAULT_FRAMEWORK_FILE = "config/framework-config.yaml"
 ALL_SCOPES: tuple[str, ...] = ("project", "workflow", "task", "agent")
+
+#: Harness profiles. ``full`` (default) requires every registered plugin, as before. ``pack`` explicitly
+#: excludes plugins registered as ``optional`` (parent-repository integrations) together with their agents,
+#: skills, the workflows that use those agents and the policy entries that name them, and reports each
+#: exclusion. Nothing optional disappears silently, and no security rule for a remaining agent is dropped.
+PROFILES: tuple[str, ...] = ("full", "pack")
+DEFAULT_PROFILE = "full"
+PROFILE_ENV = "DAE_HARNESS_PROFILE"
+#: Optional config file: framework-config ``configs.orchestration`` (canonical orchestration contract).
+ORCHESTRATION_KEY = "orchestration"
 
 # key under framework-config `configs:` → (expected `kind`, schema name)
 _CONFIG_FILES: dict[str, tuple[str, str]] = {
@@ -68,6 +82,8 @@ class PluginSpec:
     agent_policy: str | None = None             # PluginSecurityPolicy file, relative to the plugin root
     load_hooks: bool = True                     # False: the plugin's own hooks are not loaded in harness sessions
     preload_skills: bool = False                # True: the harness injects registered SKILL.md files itself
+    optional: bool = False                      # True: an integration the ``pack`` profile may exclude
+    description: str = ""                       # what the plugin provides (shown when missing or excluded)
 
     @property
     def manifest(self) -> Path:
@@ -309,6 +325,11 @@ class HarnessConfig:
     security: SecurityConfig
     sources: Mapping[str, Path]   # config key ("framework", "agent_registry", ...) → file
     plugins: tuple[PluginSpec, ...] = ()
+    orchestration: "OrchestrationPolicy | None" = None
+    profile: str = DEFAULT_PROFILE
+    #: What the profile excluded: "plugin:<id>", "agent:<id>", "skill:<id>" (``pack`` profile only).
+    excluded: tuple[str, ...] = ()
+    excluded_plugins: tuple[PluginSpec, ...] = ()
 
     def label(self, key: str) -> str:
         """Human-friendly path of a config file, for error messages."""
@@ -454,7 +475,8 @@ def _plugin(item: Mapping[str, Any], repo_root: Path) -> PluginSpec:
     return PluginSpec(id=item["id"], path=_resolve(anchor, item["path"]), rel_path=item["path"], base=base,
                       anchor=anchor, read_paths=tuple(item.get("read_paths", ())),
                       agent_policy=item.get("agent_policy"), load_hooks=item.get("load_hooks", True),
-                      preload_skills=item.get("preload_skills", False))
+                      preload_skills=item.get("preload_skills", False), optional=item.get("optional", False),
+                      description=item.get("description", ""))
 
 
 def plugin_containing(path: Path, plugins: tuple[PluginSpec, ...]) -> str | None:
@@ -577,8 +599,58 @@ def _security(doc: Mapping[str, Any]) -> SecurityConfig:
 # --------------------------------------------------------------------------- entry point
 
 
-def load_config(root: Path | str, framework_file: str = DEFAULT_FRAMEWORK_FILE) -> HarnessConfig:
-    """Load and validate every configuration file of the harness rooted at ``root``."""
+def resolve_profile(profile: str | None = None) -> str:
+    """The explicit profile, else ``$DAE_HARNESS_PROFILE``, else ``full``. Unknown names are an error."""
+    value = profile or os.environ.get(PROFILE_ENV) or DEFAULT_PROFILE
+    if value not in PROFILES:
+        raise ConfigError("Unknown harness profile", [ValidationIssue(
+            "profile", "", f"unknown profile '{value}' (known: {', '.join(PROFILES)})", "unknown-profile")])
+    return value
+
+
+def _load_orchestration(root: Path, rel: str, issues: list[ValidationIssue]) -> "OrchestrationPolicy | None":
+    from .orchestration import POLICY_KIND, OrchestrationPolicy
+
+    path = _resolve(root, rel)
+    label = relative_label(path, root)
+    try:
+        doc = load_yaml(path, label)
+    except ConfigError as exc:
+        issues.extend(exc.issues)
+        return None
+    found = check_document(doc, label, POLICY_KIND, "orchestration-policy")
+    issues.extend(found)
+    return None if found else OrchestrationPolicy.from_dict(doc, source=path)
+
+
+def _apply_profile(config: HarnessConfig, profile: str) -> HarnessConfig:
+    """``pack``: drop optional plugins and everything that belongs to them, recording each id."""
+    if profile == DEFAULT_PROFILE:
+        return config
+    dropped = tuple(p for p in config.plugins if p.optional)
+    ids = {p.id for p in dropped}
+    agents = tuple(a for a in config.agents if a.plugin not in ids)
+    skills = tuple(s for s in config.skills if s.plugin not in ids)
+    gone_agents = {a.id for a in config.agents} - {a.id for a in agents}
+    security = replace(config.security, tool_overrides=tuple(
+        o for o in config.security.tool_overrides if o.agent_id not in gone_agents))
+    evaluation = replace(config.evaluation, targets=tuple(
+        t for t in config.evaluation.targets if not (t.type == "agent" and t.id in gone_agents)))
+    excluded = ([f"plugin:{p.id}" for p in dropped] + [f"agent:{a}" for a in sorted(gone_agents)]
+                + sorted(f"skill:{s.id}" for s in config.skills if s.plugin in ids))
+    return replace(config, plugins=tuple(p for p in config.plugins if not p.optional), agents=agents, skills=skills,
+                   security=security, evaluation=evaluation, profile=profile, excluded=tuple(excluded),
+                   excluded_plugins=dropped)
+
+
+def load_config(root: Path | str, framework_file: str = DEFAULT_FRAMEWORK_FILE, *,
+                profile: str | None = None) -> HarnessConfig:
+    """Load and validate every configuration file of the harness rooted at ``root``.
+
+    ``profile`` (default ``$DAE_HARNESS_PROFILE``, else ``full``) selects whether optional plugins are
+    excluded explicitly; see :data:`PROFILES`.
+    """
+    profile = resolve_profile(profile)
     root = Path(root).resolve()
     framework_path = _resolve(root, framework_file)
     framework_label = relative_label(framework_path, root)
@@ -604,6 +676,10 @@ def load_config(root: Path | str, framework_file: str = DEFAULT_FRAMEWORK_FILE) 
             found = _semantic_issues(key, doc, label)
         issues.extend(found)
         docs[key] = doc
+    orchestration = None
+    if framework_doc["configs"].get(ORCHESTRATION_KEY):
+        sources[ORCHESTRATION_KEY] = _resolve(root, framework_doc["configs"][ORCHESTRATION_KEY])
+        orchestration = _load_orchestration(root, framework_doc["configs"][ORCHESTRATION_KEY], issues)
     if issues:
         _raise(issues, "Invalid configuration")
 
@@ -618,6 +694,8 @@ def load_config(root: Path | str, framework_file: str = DEFAULT_FRAMEWORK_FILE) 
         security=_security(docs["security"]),
         sources=sources,
         plugins=plugins,
+        orchestration=orchestration,
     )
+    config = _apply_profile(config, profile)
     log.debug("config.loaded", extra={"root": str(root), "agents": len(config.agents), "skills": len(config.skills)})
     return config

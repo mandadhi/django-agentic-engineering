@@ -6,7 +6,8 @@
       "config/security-config.yaml",
       "agents/<id>.md (frontmatter tools, disallowedTools)",
       "config/agent-registry.yaml",
-      "plugin_packaging/standalone-security.yaml"
+      "plugin_packaging/standalone-security.yaml",
+      "config/orchestration-policy.yaml"
     ]
   },
   "schema_version": "1.0",
@@ -321,6 +322,28 @@
         "Bash"
       ],
       "deny": []
+    },
+    "django-orchestrator": {
+      "mode": "read-only",
+      "tools": [
+        "Agent",
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": [],
+      "delegates": [
+        "django-engineering:django-project-analyzer",
+        "django-engineering:django-architecture-agent",
+        "django-engineering:django-model-agent",
+        "django-engineering:django-api-agent",
+        "django-engineering:django-security-agent",
+        "django-engineering:django-testing-agent",
+        "django-engineering:django-performance-agent",
+        "django-engineering:django-documentation-agent",
+        "django-engineering:django-code-review-agent"
+      ]
     }
   }
 }

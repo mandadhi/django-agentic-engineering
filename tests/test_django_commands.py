@@ -81,10 +81,15 @@ def split_skills_and_rules(registry: HarnessRegistry, agent_id: str) -> tuple[tu
 # ---------------------------------------------------------------------- discovery
 
 
+#: Phase 6: /orchestrate briefs the orchestrator, not a specialist (see tests/test_orchestration.py).
+ORCHESTRATE = "orchestrate"
+
+
 def test_all_nine_commands_discovered() -> None:
     files = {p.stem for p in COMMANDS_DIR.glob("*.md") if not p.stem.isupper()}     # skip README.md
-    assert files == set(EXPECTED)
-    assert {p.name for p in COMMANDS_DIR.iterdir()} == {f"{c}.md" for c in EXPECTED} | {"README.md"}
+    assert files == set(EXPECTED) | {ORCHESTRATE}
+    assert {p.name for p in COMMANDS_DIR.iterdir()} == {f"{c}.md" for c in EXPECTED} | {f"{ORCHESTRATE}.md",
+                                                                                         "README.md"}
 
 
 def test_readme_lists_every_command_with_its_agent() -> None:
@@ -373,4 +378,5 @@ def test_compatible_with_existing_repository_commands() -> None:
 def test_existing_agents_skills_and_rules_unchanged(registry: HarnessRegistry) -> None:
     assert len(registry.agents) == 17 and len(registry.skills) == 33
     assert len(registry.skills.by_tag("rule")) == 12
-    assert {p.stem for p in AGENTS_DIR.glob("*.md") if not p.stem.isupper()} == set(EXPECTED.values())
+    assert {p.stem for p in AGENTS_DIR.glob("*.md") if not p.stem.isupper()} == set(EXPECTED.values()) | {
+        "django-orchestrator"}

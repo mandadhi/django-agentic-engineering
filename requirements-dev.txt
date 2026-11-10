@@ -1,7 +1,4 @@
 # Versions verified with the Phase 2 test run (Python 3.13).
-PyYAML==6.0.3
-jsonschema==4.26.0
-referencing==0.37.0
+# Harness runtime pins live in requirements-harness.txt (single list); this adds the test runner.
+-r requirements-harness.txt
 pytest==9.2.0
-# Agent execution (Phase 2). The wheel bundles the Claude Code CLI (2.1.317 for this version).
-claude-agent-sdk==0.2.177

@@ -300,9 +300,39 @@ def run_command(args: argparse.Namespace, registry: HarnessRegistry, *, out=None
         return EXIT_INTERRUPTED
 
 
+def _orchestrate_run(args: argparse.Namespace, registry: HarnessRegistry, manager: ExecutionManager, out,
+                     adapter, run_async: Callable[[Any], Any]) -> int:
+    """Plan the route from the canonical policy and run it through the existing workflow engine."""
+    from core.orchestration import EXTENSION_KEY, OrchestrationError, plan_route, workflow_document
+
+    policy = registry.config.orchestration
+    if policy is None:
+        raise HarnessError("no orchestration policy configured (framework-config configs.orchestration)")
+    try:
+        plan = plan_route(policy, args.task, category=args.category, include=args.include, exclude=args.exclude)
+    except OrchestrationError as exc:
+        hint = f"; choose with --category: {', '.join(exc.candidates)}" if exc.candidates else ""
+        print(f"CANNOT ROUTE [{exc.code}]: {exc}{hint}", file=sys.stderr)
+        return EXIT_INPUT
+    runner = _runner(registry, manager, args, adapter)
+    definition = workflow_document(policy, plan, args.task)
+    execution = runner.start_definition(definition, workspace=args.workspace, metadata={
+        EXTENSION_KEY: {"orchestrator": policy.orchestrator_id, "policy_version": policy.version,
+                        "category": plan.category, "agents": list(plan.agents), "selection": plan.selection}})
+    print(f"started {execution.execution_id} ({execution.workflow_id}): {' -> '.join(plan.agents)}", file=out)
+    code = _print_outcome(run_async(runner.run_workflow(execution.execution_id)), out)
+    not_run = [s.stage_id for s in manager.store.list_stages(execution.execution_id)
+               if s.status.value in ("pending", "ready")]
+    if not_run and code != EXIT_WAITING:
+        print(f"not run: {', '.join(not_run)} (an earlier step did not succeed)", file=out)
+    return code
+
+
 def _dispatch_execution(args: argparse.Namespace, registry: HarnessRegistry, manager: ExecutionManager, out,
                         adapter) -> int:
     run_async: Callable[[Any], Any] = asyncio.run
+    if args.command == "orchestrate" and args.action == "run":
+        return _orchestrate_run(args, registry, manager, out, adapter, run_async)
     if args.command == "agent" and args.action == "run":
         runner = _runner(registry, manager, args, adapter)
         execution = runner.start_agent(args.agent_id, args.objective, workspace=args.workspace,

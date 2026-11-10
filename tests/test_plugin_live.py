@@ -36,9 +36,9 @@ pytestmark = [
 PLUGIN = "django-engineering"
 AGENTS = {"django-project-analyzer", "django-architecture-agent", "django-model-agent", "django-api-agent",
           "django-security-agent", "django-testing-agent", "django-performance-agent", "django-documentation-agent",
-          "django-code-review-agent"}
+          "django-code-review-agent", "django-orchestrator"}           # nine specialists + the orchestrator (Phase 6)
 COMMANDS = {"django-analyze", "django-design", "django-model", "django-api", "django-security", "django-test",
-            "django-optimize", "django-document", "django-review"}
+            "django-optimize", "django-document", "django-review", "orchestrate"}
 
 
 @pytest.fixture

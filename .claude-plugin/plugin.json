@@ -1,16 +1,17 @@
 {
   "name": "django-engineering",
-  "version": "0.4.0",
-  "description": "Django Engineering Pack: nine Django agents, nine /django-* developer commands, twelve Django skills and twelve mandatory engineering rules, with output templates, shared references and a fail-closed security guard.",
+  "version": "0.5.0",
+  "description": "Django Engineering Pack: a Django orchestrator and nine specialist agents, nine /django-* developer commands plus /orchestrate, twelve Django skills and twelve mandatory engineering rules, with output templates, shared references and a fail-closed security guard.",
   "author": { "name": "Techwave Digital AI" },
   "license": "UNLICENSED",
-  "keywords": ["django", "django-rest-framework", "python", "postgresql", "security", "testing", "performance", "architecture", "code-review", "documentation"],
+  "keywords": ["django", "orchestration", "django-rest-framework", "python", "postgresql", "security", "testing", "performance", "architecture", "code-review", "documentation"],
   "agents": [
     "./agents/django-api-agent.md",
     "./agents/django-architecture-agent.md",
     "./agents/django-code-review-agent.md",
     "./agents/django-documentation-agent.md",
     "./agents/django-model-agent.md",
+    "./agents/django-orchestrator.md",
     "./agents/django-performance-agent.md",
     "./agents/django-project-analyzer.md",
     "./agents/django-security-agent.md",
@@ -25,7 +26,8 @@
     "./commands/django-optimize.md",
     "./commands/django-review.md",
     "./commands/django-security.md",
-    "./commands/django-test.md"
+    "./commands/django-test.md",
+    "./commands/orchestrate.md"
   ],
   "skills": ["./skills/", "./rules/"]
 }

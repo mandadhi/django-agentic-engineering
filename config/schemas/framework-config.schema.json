@@ -36,7 +36,8 @@
         "skill_registry": { "type": "string", "minLength": 1 },
         "workflow": { "type": "string", "minLength": 1 },
         "evaluation": { "type": "string", "minLength": 1 },
-        "security": { "type": "string", "minLength": 1 }
+        "security": { "type": "string", "minLength": 1 },
+        "orchestration": { "type": "string", "minLength": 1, "description": "Optional: the canonical orchestration contract (OrchestrationPolicy) shared with the standalone plugin." }
       }
     },
     "storage": {

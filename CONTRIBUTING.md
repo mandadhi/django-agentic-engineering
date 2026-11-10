@@ -59,6 +59,7 @@ in your pull request which suites you ran and what they reported.
 |---|---|
 | Add or rename an agent | `.claude-plugin/plugin.json` `agents`, `config/agent-registry.yaml`, `plugin_packaging/standalone-security.yaml`, the expected counts in `plugin_packaging/build.py`, and the tests' expected sets. See [agents/README.md](agents/README.md). |
 | Add or rename a command | `.claude-plugin/plugin.json` `commands` and the tests. See [commands/README.md](commands/README.md). |
+| Change routing (categories, routes, limits) | Edit only `config/orchestration-policy.yaml`, then `plugin_packaging build` (it regenerates the orchestrator's routing section and delegation allowlist) and `core.cli --profile pack validate`. Never edit the generated section of `agents/django-orchestrator.md`. See [docs/orchestration.md](docs/orchestration.md). |
 | Add a skill or rule | `config/skill-registry.yaml`, the agents' `skills` lists in `config/agent-registry.yaml`, then `plugin_packaging build`. See [skills/README.md](skills/README.md) and [rules/README.md](rules/README.md). |
 | Add a template or reference | The consuming agents' `## Templates and references` sections and the tests. See [templates/README.md](templates/README.md) and [references/README.md](references/README.md). |
 | Change the security policy | `config/security-config.yaml` or `plugin_packaging/standalone-security.yaml`, then `plugin_packaging build`. |

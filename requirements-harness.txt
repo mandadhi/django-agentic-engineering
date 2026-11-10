@@ -1,0 +1,8 @@
+# Runtime dependencies of the Django Agentic Harness, pinned to the versions verified with the test
+# suite (Python 3.13). Installed by `python scripts/harness.py setup` into the harness virtual
+# environment only. The standalone plugin needs none of these.
+PyYAML==6.0.3
+jsonschema==4.26.0
+referencing==0.37.0
+# Agent execution (Phase 2). The wheel bundles the Claude Code CLI (2.1.317 for this version).
+claude-agent-sdk==0.2.177

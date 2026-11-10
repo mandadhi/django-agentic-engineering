@@ -1,0 +1,198 @@
+# Canonical orchestration contract of the Django Engineering Pack.
+#
+# This is the ONLY place that says how the specialist agents are selected and coordinated.
+# It never repeats what an agent does: each agent's Markdown (agents/<id>.md) owns its
+# responsibilities, tools and boundaries, and config/agent-registry.yaml owns its skills and rules.
+#
+# Two adapters consume this file:
+#   * Standalone plugin: `python -m plugin_packaging build` renders it into the generated section
+#     of agents/django-orchestrator.md and derives the orchestrator's delegation allowlist in
+#     hooks/security-policy.json. `python -m plugin_packaging check` fails on drift.
+#   * Harness: core/orchestration.py loads it (framework-config `configs.orchestration`), classifies
+#     a task, selects the route and runs it as one workflow execution through the existing
+#     ExecutionManager / AgentRunner (`python -m core.cli orchestrate plan|run`).
+# `python -m core.cli validate` and the packaging check reject unknown agents or skills, invalid
+# `after` references, duplicate ids and limit violations.
+schema_version: "1.0"
+kind: OrchestrationPolicy
+version: 1.0.0
+
+# The user-facing orchestrator of the standalone plugin. The harness does not register it as an
+# agent: there, core/orchestration.py plays this role (logical identity `django-orchestrator`).
+orchestrator:
+  id: django-orchestrator
+  path: agents/django-orchestrator.md
+  command: orchestrate                     # /django-engineering:orchestrate
+  skills: [django-security-standards]      # preloaded into the orchestrator (conduct rules SEC-A*)
+
+limits:
+  max_delegations: 6                       # specialist invocations per request (harness: stages per route)
+  max_attempts_per_step: 2                 # one retry of a failed step, never more
+  max_clarifying_questions: 3
+
+# The only agents the orchestrator may delegate to. It never delegates to itself.
+specialists:
+  - django-project-analyzer
+  - django-architecture-agent
+  - django-model-agent
+  - django-api-agent
+  - django-security-agent
+  - django-testing-agent
+  - django-performance-agent
+  - django-documentation-agent
+  - django-code-review-agent
+
+# Task categories. `signals` are lower-case word prefixes: the harness scores a task by the number
+# of signals it contains (deterministic); the standalone orchestrator uses them as hints next to its
+# own reading of the request and the repository.
+# Route steps run in order. `after` names earlier steps of the same route (default: the previous
+# included step). An `optional` step is included only when the task needs it: the standalone
+# orchestrator decides from `when`; the harness includes it when one of its `signals` occurs in
+# the task (or with --with/--without). `supplementary_skills` are pack skills no agent preloads;
+# the brief tells the specialist to read them.
+categories:
+  - id: project-analysis
+    title: Understand an unfamiliar Django project
+    signals: [analy, understand, profile, onboard, unfamiliar, explore, overview, map the, inventory]
+    route:
+      - agent: django-project-analyzer
+        purpose: Profile versions, settings, apps, models, interfaces and ranked risks.
+
+  - id: architecture-design
+    title: Design a new Django application or restructure an existing one
+    signals: [design, architect, boundar, layer, refactor, restructur, split, modular, adr, new app]
+    route:
+      - agent: django-project-analyzer
+        purpose: Establish the current structure the design starts from.
+      - agent: django-architecture-agent
+        purpose: App boundaries, layering, ADRs and an ordered implementation plan.
+
+  - id: data-model
+    title: Create or modify Django models and migrations
+    signals: [model, field, migration, constraint, index, foreign key, relationship, schema, table]
+    route:
+      - agent: django-architecture-agent
+        optional: true
+        when: The change creates a new app or moves ownership of data between apps.
+        signals: [new app, ownership, boundar, which app]
+        purpose: Decide which app owns the new data before it is modelled.
+      - agent: django-model-agent
+        purpose: Models, constraints, indexes and safe migrations with a migration-risk assessment.
+
+  - id: api-development
+    title: Build or change Django REST Framework endpoints
+    signals: [api, endpoint, serializer, viewset, drf, rest framework, router, pagination, throttl]
+    route:
+      - agent: django-model-agent
+        optional: true
+        when: The endpoints need models or fields that do not exist yet.
+        signals: [new model, new field, migration, add field]
+        purpose: Add the missing models or fields the API contract needs.
+      - agent: django-api-agent
+        purpose: Endpoint contract, serializers, views, permissions, scoping and API tests.
+
+  - id: security-assessment
+    title: Investigate authentication, authorisation or other security concerns
+    signals: [secur, auth, permission, idor, csrf, cors, xss, injection, secret, vulnerab, harden, ssrf]
+    route:
+      - agent: django-security-agent
+        purpose: Evidence-backed security findings; remediation only when the user asked for it.
+      - agent: django-api-agent
+        optional: true
+        when: Findings require changing DRF permission classes, authentication or queryset scoping and the user asked for fixes.
+        signals: [fix the api, fix endpoint, permission class]
+        purpose: Apply the API-level fixes the security findings call for.
+
+  - id: testing
+    title: Add or repair automated tests
+    signals: [test, coverage, pytest, regression test, flaky, failing test, fixture]
+    route:
+      - agent: django-testing-agent
+        purpose: Plan, write and run tests with the project's own runner; report gaps.
+
+  - id: performance
+    title: Investigate performance problems
+    signals: [slow, performance, optimi, n+1, latency, query count, cach, timeout, memory]
+    route:
+      - agent: django-performance-agent
+        purpose: Measure, find the cause, apply targeted fixes and re-measure.
+      - agent: django-model-agent
+        optional: true
+        when: The fix needs a new index, constraint or schema change and a migration.
+        signals: [index, migration, denormali]
+        purpose: Add the index or schema change through a safe migration.
+
+  - id: documentation
+    title: Produce technical documentation
+    signals: [document, docs, readme, runbook, api reference, guide, write up]
+    route:
+      - agent: django-documentation-agent
+        purpose: Code-derived documentation; never changes application code.
+
+  - id: code-review
+    title: Review an existing implementation or change
+    signals: [review, pull request, diff, before merge, audit the change, critique]
+    route:
+      - agent: django-code-review-agent
+        purpose: Read-only review with file:line findings and a verdict.
+
+  - id: feature-delivery
+    title: Implement a feature end to end
+    signals: [end to end, end-to-end, implement, feature, deliver]
+    requires_any: [django-model-agent, django-api-agent]
+    route:
+      - agent: django-project-analyzer
+        purpose: Establish the project's structure and conventions before changing it.
+      - agent: django-architecture-agent
+        optional: true
+        when: The feature introduces a new app, crosses app boundaries or needs an ADR.
+        signals: [new app, boundar, architect, design]
+        purpose: Decide boundaries and the implementation order.
+      - agent: django-model-agent
+        optional: true
+        when: The feature needs new or changed models or migrations.
+        signals: [model, field, migration, table, schema]
+        purpose: Data model and migrations.
+      - agent: django-api-agent
+        optional: true
+        when: The feature exposes or changes DRF endpoints.
+        signals: [api, endpoint, serializer, viewset, drf, rest framework]
+        purpose: Endpoints, permissions and API tests.
+      - agent: django-testing-agent
+        purpose: Fill test gaps for the whole feature and run the suite.
+      - agent: django-code-review-agent
+        purpose: Gate review of the complete change.
+
+# Passed to every delegated step (standalone: in the brief; harness: as stage constraints).
+step_constraints:
+  - id: stay-in-role
+    description: Work only within your own agent definition, tools and write mode; hand anything else back as a recommendation.
+  - id: honest-status
+    description: Report failures, skipped work and assumptions explicitly; never claim tests passed unless you ran them and saw them pass.
+  - id: no-secrets
+    description: Never print secret values; report only their location and type.
+
+completion_criteria:
+  - Every step in the route ran, or is reported as skipped or failed with the reason.
+  - The combined result is checked against the user's original objective, not only against each step's brief.
+  - Verification actually performed (tests run, checks executed) is listed separately from verification not performed.
+  - Unresolved issues, assumptions and recommended follow-up commands are listed.
+
+clarify_when:
+  - The request is empty or names no Django work.
+  - Two or more categories fit equally and they lead to different write scopes.
+  - The request asks for changes but does not say which app, endpoint or model when the repository has several candidates.
+  - The request would require a destructive, network or production-affecting operation.
+
+failure_policy:
+  - Capture the failing step's error and what it completed before failing.
+  - Retry a failed step at most once (limits.max_attempts_per_step), and only when the failure looks transient or the brief was missing information you can now supply.
+  - Do not start steps that depend on a failed step; report them as not run.
+  - Report partial completion as partial. Never report success for a failed or skipped step.
+
+security_boundaries:
+  - The orchestrator itself is read-only. Only the delegated specialist changes files, within that specialist's write mode.
+  - Delegation never grants a specialist tools, paths or write modes it does not already have.
+  - Classify each request first as read-only inspection, file modification, destructive operation, network operation, sensitive configuration or security-sensitive code.
+  - Destructive, network and production-affecting operations require the user's explicit approval through the active permission or approval mechanism; the orchestrator never answers an approval itself.
+  - Never run two writing specialists in parallel or on the same files.
