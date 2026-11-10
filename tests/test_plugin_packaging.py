@@ -105,21 +105,35 @@ def test_directory_structure() -> None:
         assert (ROOT / folder).is_dir(), folder
     for path in (MANIFEST, HOOKS_JSON, POLICY_JSON, GUARD_PY, ROOT / "README.md"):
         assert path.is_file(), path
-    # The plugin ships no other component folders and no stray manifests.
-    assert sorted(p.name for p in (ROOT / ".claude-plugin").iterdir()) == ["plugin.json"]
+    # The plugin ships no other component folders and no stray manifests. marketplace.json makes the
+    # repository installable as a GitHub marketplace (`/plugin marketplace add <owner>/<repo>`).
+    assert sorted(p.name for p in (ROOT / ".claude-plugin").iterdir()) == ["marketplace.json", "plugin.json"]
     assert not (ROOT / ".mcp.json").exists() and not (ROOT / "settings.json").exists()
+
+
+def test_marketplace_lists_the_plugin_at_the_repository_root() -> None:
+    market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    assert market["name"] == "django-agentic-engineering" and market["owner"]["name"]
+    assert [entry["name"] for entry in market["plugins"]] == [manifest()["name"]] == [PLUGIN]
+    entry = market["plugins"][0]
+    assert entry["source"] == "./"                           # the repository root is the plugin root
+    # plugin.json stays the single source of the plugin's components and version.
+    for key in ("version", "agents", "commands", "skills", "hooks", "strict"):
+        assert key not in entry, f"marketplace entry must not redefine {key}"
 
 
 def test_cli_validate_accepts_the_plugin() -> None:
     claude = shutil.which("claude")
     if not claude:
         pytest.skip("Claude Code CLI not on PATH")
-    proc = subprocess.run([claude, "plugin", "validate", str(ROOT), "--json"], capture_output=True, text=True,
-                          encoding="utf-8", timeout=120)
-    report = json.loads(proc.stdout)
-    assert report["manifest"]["errors"] == [], report["manifest"]["errors"]
-    errors = [c for c in report.get("contents", []) if c.get("errors")]
-    assert not errors, errors
+    # The repository root holds marketplace.json too, so validate each manifest explicitly.
+    for target, kind in ((MANIFEST, "plugin"), (ROOT / ".claude-plugin" / "marketplace.json", "marketplace")):
+        proc = subprocess.run([claude, "plugin", "validate", str(target), "--json"], capture_output=True, text=True,
+                              encoding="utf-8", timeout=120)
+        report = json.loads(proc.stdout)
+        assert report["manifest"]["type"] == kind and report["manifest"]["errors"] == [], report["manifest"]
+        errors = [c for c in report.get("contents", []) if c.get("errors")]
+        assert not errors, errors
 
 
 # ---------------------------------------------------------------------- discovery

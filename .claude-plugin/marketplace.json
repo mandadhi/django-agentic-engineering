@@ -1,0 +1,15 @@
+{
+  "name": "django-agentic-engineering",
+  "owner": { "name": "Techwave Digital AI" },
+  "metadata": {
+    "description": "Claude Code marketplace for the Django Engineering Plugin from the Django Agentic Engineering repository."
+  },
+  "plugins": [
+    {
+      "name": "django-engineering",
+      "source": "./",
+      "description": "Nine Django agents, nine /django-* commands, twelve Django skills and twelve engineering rules, with output templates, shared references and a fail-closed security guard.",
+      "category": "backend"
+    }
+  ]
+}

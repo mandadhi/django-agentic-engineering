@@ -58,32 +58,38 @@ so read-only agents stay read-only and the documentation agent still changes doc
 
 The agent's inline Output skeleton remains the minimum it always produces. In the Claude Code
 plugin (Phase 4) the section's paths start at `${CLAUDE_PLUGIN_ROOT}`, which Claude Code fills in,
-so templates and references resolve wherever the plugin is installed. In a harness run the pack
-files are not readable yet, so the inline skeleton is what the agent follows there.
+so templates and references resolve wherever the plugin is installed. Since Phase 5 a harness run
+resolves the same section against the plugin root and offers the files as task-context
+references (see [docs/harness.md](../docs/harness.md#harness-integration-phase-5)); the inline
+skeleton stays the fallback when a file cannot be read.
 `tests/test_django_templates.py` checks that every inline heading also appears in the agent's
 primary template.
 
-**Runnable in Claude Code, not yet in the harness.** Installed as the `django-engineering`
-Claude Code plugin, each agent preloads its registered skills and rules through the generated
-`skills:` frontmatter line (`django-engineering:<id>`, written by `python -m plugin_packaging build`
-from `config/agent-registry.yaml`; do not edit it by hand). The harness ignores that line and
-reads skills from the registry. Harness integration is not implemented yet: the SDK loads skills
-only through registered plugins, so a harness run of a Django agent still fails closed with
-`plugin.unresolved` before the SDK starts (see the project README, Known limitations).
+**Runnable in Claude Code and in the harness.** Installed as the `django-engineering` Claude Code
+plugin, each agent preloads its registered skills and rules through the generated `skills:`
+frontmatter line (`django-engineering:<id>`, written by `python -m plugin_packaging build` from
+`config/agent-registry.yaml`; do not edit it by hand). The harness ignores that line: it reads
+skills from the registry, injects each registered `SKILL.md` itself and runs the agent as
+`dae-<id>` (Phase 5).
 
 To add an agent:
-1. Create `agents/<id>.md`. Projects Explorer lists it automatically, because it scans
-   `projects/*/agents/*.md` and skips ALL-CAPS names such as this README.
-2. Register it in `config/agent-registry.yaml`. Add only harness data; the description,
-   tools, model and phase stay in the file.
+1. Create `agents/<id>.md`.
+2. Register it in `config/agent-registry.yaml` as a member of the plugin. Add only harness data;
+   the description, tools, model and phase stay in the file.
    ```yaml
    - id: django-model-designer          # must equal the file's frontmatter `name`
-     source: local
-     path: projects/django-agentic-engineering/agents/django-model-designer.md
-     skills: [db-schema-conventions]    # preloaded via AgentDefinition.skills
+     source: plugin
+     plugin: django-engineering
+     path: agents/django-model-designer.md   # relative to the plugin root
+     role: engineer
+     skills: [django-orm, django-security-standards]
    ```
-3. Run `python -m core.cli validate`. Loading fails if the path or any skill is missing,
-   if the file has no frontmatter, or if its `name` differs from the registry id.
+3. List the file in `.claude-plugin/plugin.json` `agents`, give it a write mode in
+   `plugin_packaging/standalone-security.yaml`, and run `python -m plugin_packaging build`.
+   The expected component counts are pinned in `plugin_packaging/build.py` and the tests.
+4. Run `python -m plugin_packaging check` and the tests. In the full parent-repository layout,
+   also run `python -m core.cli validate`: loading fails if the path or any skill is missing, if
+   the file has no frontmatter, or if its `name` differs from the registry id.
 
 Agents stay Markdown; there are no Python agent classes. The Phase 2 runner turns each
 file into an Agent SDK `AgentDefinition`: the body becomes the prompt, and `tools`,

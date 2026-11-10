@@ -55,8 +55,9 @@ single skill and is used by several agents.
 Each Django agent's `## Templates and references` section lists the references it uses, by id.
 The files are part of the pack, not of the workspace. In the Claude Code plugin the agents read
 them at `${CLAUDE_PLUGIN_ROOT}/references/<id>.md`; the plugin's guard lets the pack's agents read
-these files without a permission prompt. In a harness run they are not readable yet (see the
-project README, Known limitations), so there the agents work from their preloaded skills and rules.
+these files without a permission prompt. Since Phase 5 a harness run resolves the same ids against
+the plugin root and offers the files as task-context references, read on demand (see
+[docs/harness.md](../docs/harness.md#harness-integration-phase-5)).
 
 ## Adding a reference
 

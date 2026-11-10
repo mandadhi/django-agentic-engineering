@@ -21,11 +21,11 @@ same way. This repository already ships standards as skills (`pr-review-standard
    `abstract`, `sdlc_phase`, `tech_stack`, `domain`) and these sections: Purpose, Scope,
    Mandatory requirements, Recommendations, Anti-patterns, Security and maintainability,
    Verification, Related skills.
-2. Register the rule in `config/skill-registry.yaml` with `source: local`,
-   `path: projects/django-agentic-engineering/rules/<rule-id>` and the tag `rule`.
+2. Register the rule in `config/skill-registry.yaml` with `source: plugin`,
+   `plugin: django-engineering`, `path: rules/<rule-id>` and the tag `rule`.
    `registry.skills.by_tag("rule")` lists all rules.
 3. Attach the rule to agents in their `skills:` lists in `config/agent-registry.yaml`. The
-   harness preloads them like skills (`AgentDefinition.skills`). Each agent's
+   harness injects them like skills (each registered `SKILL.md`, in registry order). Each agent's
    `## Mandatory rules` section lists the same ids.
 
 Requirement ids are stable: `<PREFIX>-M<n>` is mandatory (MUST), `<PREFIX>-R<n>` is
@@ -72,5 +72,5 @@ cited id exists.
 
 As with the Django skills, the Claude Code plugin (Phase 4) loads these rules in place from
 `./rules/` (declared in `.claude-plugin/plugin.json`), with no copy or adapter, and each agent
-preloads its registered rules. In the harness the SDK can load them only once harness integration
-is done (see the project README, Known limitations).
+preloads its registered rules. Since Phase 5 the harness injects the same registered rules into each
+agent (see [docs/harness.md](../docs/harness.md#harness-integration-phase-5)).

@@ -17,6 +17,6 @@ Evaluation suites (fixtures plus expected results) and scorer implementations go
 - `contracts/evaluation-result.schema.json` defines the record a scorer produces, with a
   score and pass/fail per criterion and an overall result.
 
-Phase 2 will add the rule scorers (`contract-compliance`, `expected-outputs-present`,
+A later phase will add the rule scorers (`contract-compliance`, `expected-outputs-present`,
 `no-secrets-in-artifacts`) and an LLM-judge scorer, and will persist each
 `EvaluationResult` against its execution.

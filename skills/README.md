@@ -14,11 +14,11 @@ that Claude Code and Projects Explorer expect.
 
 Phase 4 ships these skills, unchanged and in place, in the `django-engineering` Claude Code
 plugin (`.claude-plugin/plugin.json` lists `./skills/` and `./rules/`). There they are named
-`django-engineering:<id>`, and each Django agent preloads its registered ones. In the harness, a
-`source: local` skill still cannot be loaded: the Agent SDK loads skills only through registered
-plugins, and harness integration is a later phase (see the project README, Known limitations).
-`config/skill-registry.yaml` also reuses existing plugin skills, for example
-`plugins/security/skills/owasp-top10-review`.
+`django-engineering:<id>`, and each Django agent preloads its registered ones. Since Phase 5 the
+harness registers them as members of the same `django-engineering` plugin (`source: plugin`) and
+injects each registered `SKILL.md` into the agent. `config/skill-registry.yaml` also reuses skills
+from the parent repository's plugins, for example `plugins/security/skills/owasp-top10-review`
+(see [docs/harness.md](../docs/harness.md#parent-repository-layout)).
 
 The security skill is `django-security-engineering` (renamed from `django-security` in Phase 4)
 because `/django-security` is a developer command, and in a plugin a command shadows a skill
@@ -52,7 +52,9 @@ their `references/` files for explanations, and never repeat them.
 
 To add a skill:
 1. Create `skills/<id>/SKILL.md`.
-2. Register it with `source: local` and
-   `path: projects/django-agentic-engineering/skills/<id>`.
-3. Reference it from an agent's `skills:` list, then run `python -m core.cli validate`.
-   Any unknown skill id, or a directory without `SKILL.md`, is reported.
+2. Register it in `config/skill-registry.yaml` with `source: plugin`,
+   `plugin: django-engineering` and `path: skills/<id>` (relative to the plugin root).
+3. Reference it from an agent's `skills` list in `config/agent-registry.yaml`, then run
+   `python -m plugin_packaging build` and `check` (the skill count is pinned in
+   `plugin_packaging/build.py`). In the full parent-repository layout, `python -m core.cli validate`
+   also reports any unknown skill id or a directory without `SKILL.md`.
