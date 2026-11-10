@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "kind": "AgentTask",
+  "task_id": "task-7f3c2a9e",
+  "agent_id": "security-auditor",
+  "execution_id": "exec-1b9d4c20",
+  "workflow_id": "security-review",
+  "stage_id": "audit",
+  "attempt": 1,
+  "objective": "Audit the Django project for OWASP Top 10 issues and produce a prioritised findings report.",
+  "context": {
+    "refs": [
+      {
+        "id": "project-settings",
+        "scope": "project",
+        "uri": "repo://config/settings/base.py",
+        "description": "Django base settings",
+        "token_estimate": 1800
+      },
+      {
+        "id": "threat-model",
+        "scope": "workflow",
+        "uri": "file://var/artifacts/exec-1b9d4c20/threat-model/threat-model.md",
+        "description": "Output of the threat-model stage",
+        "token_estimate": 2400
+      }
+    ],
+    "inline": [
+      {
+        "id": "audit-focus",
+        "scope": "task",
+        "content": "Focus on authentication views and DRF permission classes.",
+        "token_estimate": 14
+      }
+    ],
+    "token_budget": { "total": 24000, "reserved": 4000, "used": 4214 }
+  },
+  "constraints": [
+    { "id": "read-only", "description": "Do not modify source files.", "severity": "must" },
+    { "id": "cite-lines", "description": "Cite file and line for every finding.", "severity": "should" }
+  ],
+  "dependencies": [
+    { "type": "stage", "ref": "threat-model", "required": true },
+    { "type": "stage", "ref": "sast", "required": true }
+  ],
+  "expected_outputs": [
+    { "name": "audit-report", "type": "report", "description": "Findings ranked by severity", "required": true }
+  ],
+  "created_at": "2026-11-03T10:15:00Z",
+  "extensions": { "django.version": "5.2" }
+}

@@ -1,0 +1,40 @@
+# Evaluation criteria and what they apply to. Scorers are planned for Phase 3; the
+# catalogue and its references (targets must exist) are validated today.
+schema_version: "1.0"
+kind: EvaluationConfig
+
+pass_policy: all          # all: every criterion must pass | weighted: weighted mean >= threshold
+overall_threshold: 0.8    # used by the weighted policy
+
+criteria:
+  - id: contract-compliance
+    description: The AgentResult validates against contracts/agent-result.schema.json.
+    scorer: rule
+    threshold: 1.0
+    weight: 2
+  - id: expected-outputs-present
+    description: Every required ExpectedOutput of the task has a matching output artifact.
+    scorer: rule
+    threshold: 1.0
+    weight: 2
+  - id: no-secrets-in-artifacts
+    description: No security-config secret pattern matches any produced artifact.
+    scorer: rule
+    threshold: 1.0
+    weight: 3
+  - id: findings-actionable
+    description: Each finding cites a file/line and a concrete remediation.
+    scorer: llm-judge
+    threshold: 0.7
+    weight: 1
+
+targets:
+  - type: workflow
+    id: security-review
+    criteria: [contract-compliance, expected-outputs-present, no-secrets-in-artifacts]
+  - type: stage
+    id: security-review/audit
+    criteria: [findings-actionable]
+  - type: agent
+    id: secrets-scanner
+    criteria: [contract-compliance]

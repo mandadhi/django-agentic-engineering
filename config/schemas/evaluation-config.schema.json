@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/config/evaluation-config.schema.json",
+  "title": "EvaluationConfig",
+  "type": "object",
+  "required": ["schema_version", "kind", "criteria"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "../contracts/common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "EvaluationConfig" },
+    "pass_policy": { "enum": ["all", "weighted"], "default": "all" },
+    "overall_threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "scorer", "threshold"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" },
+          "description": { "type": "string", "minLength": 1 },
+          "scorer": { "enum": ["rule", "llm-judge", "human"] },
+          "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+          "weight": { "type": "number", "exclusiveMinimum": 0, "default": 1 }
+        }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "id", "criteria"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["agent", "stage", "workflow"] },
+          "id": { "type": "string", "minLength": 1, "description": "agent id, workflow id, or '<workflow>/<stage>'" },
+          "criteria": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" } }
+        }
+      }
+    }
+  }
+}

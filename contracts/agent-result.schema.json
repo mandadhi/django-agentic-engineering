@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/contracts/agent-result.schema.json",
+  "title": "AgentResult",
+  "description": "The single output contract every agent returns. Outputs and artifacts are references; content lives outside the execution store.",
+  "type": "object",
+  "required": ["schema_version", "kind", "task_id", "agent_id", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "AgentResult" },
+    "task_id": { "$ref": "common.schema.json#/$defs/RunId" },
+    "agent_id": { "$ref": "common.schema.json#/$defs/Identifier" },
+    "execution_id": { "$ref": "common.schema.json#/$defs/RunId" },
+    "status": { "enum": ["succeeded", "partial", "failed", "blocked", "cancelled"] },
+    "summary": { "type": "string" },
+    "outputs": {
+      "type": "array",
+      "description": "One entry per produced expected output, keyed by the ExpectedOutput name.",
+      "items": {
+        "type": "object",
+        "required": ["name", "artifact"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "$ref": "common.schema.json#/$defs/Identifier" },
+          "artifact": { "$ref": "common.schema.json#/$defs/ArtifactRef" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "description": "Additional artifacts not tied to a named output (logs, intermediate files).",
+      "items": { "$ref": "common.schema.json#/$defs/ArtifactRef" }
+    },
+    "references": {
+      "type": "array",
+      "description": "Sources the agent consulted (files, docs, URLs).",
+      "items": {
+        "type": "object",
+        "required": ["uri"],
+        "additionalProperties": false,
+        "properties": {
+          "uri": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "errors": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/Error" } },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "started_at": { "$ref": "common.schema.json#/$defs/Timestamp" },
+    "completed_at": { "$ref": "common.schema.json#/$defs/Timestamp" },
+    "extensions": { "$ref": "common.schema.json#/$defs/Extensions" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "enum": ["failed", "blocked"] } }, "required": ["status"] },
+      "then": { "required": ["errors"], "properties": { "errors": { "minItems": 1 } } }
+    }
+  ]
+}

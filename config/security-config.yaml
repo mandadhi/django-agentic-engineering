@@ -1,0 +1,168 @@
+# Guard rails the harness adds on top of the agents' own definitions.
+#
+# Tools: each agent's `tools` / `disallowedTools` frontmatter is the baseline. This
+# file can only take tools AWAY (never grant), so it can't contradict an agent file.
+# The result maps to the Agent SDK's `disallowed_tools` and to a PreToolUse hook,
+# which identifies the calling subagent through the `agent_type` field of its input.
+#
+# Paths: each glob becomes native `permissions.deny` Read(...) and Edit(...) rules
+# (enforced by the CLI before any hook) and is also checked by the PreToolUse hook.
+schema_version: "1.0"
+kind: SecurityConfig
+
+tools:
+  deny: [WebFetch, WebSearch]       # no agent sends code or findings to the web
+  agents:
+    # Read-only reviewers: keep them read-only even if an upstream plugin agent
+    # later adds write tools. `write_mode` (SEC-05) is enforced by the harness guard on every
+    # tool, Bash included; it does not depend on the agent's instructions. Where a plugin's
+    # agent_policy also gives the agent a mode, the stricter of the two applies.
+    - agent_id: security-auditor
+      deny: [Write, Edit]
+      write_mode: read-only
+    - agent_id: secrets-scanner
+      deny: [Write, Edit]
+      write_mode: read-only
+    - agent_id: pr-reviewer
+      write_mode: read-only
+    # May write its report, must not modify source.
+    - agent_id: security-sast-engineer
+      deny: [Edit]
+
+# What each write mode may do (SEC-06). Default deny: a capability not listed is refused
+# (`otherwise: deny`) or sent to the approver, bound to that exact call (`otherwise: approve`;
+# the default approver denies). Capabilities: every tool and every simple shell command (nested,
+# wrapped and `find -exec` commands included) is classified by its effect (core/shell_syntax.py):
+#   read     reads files or prints (git status, grep, manage.py check, ...; options checked)
+#   write    creates or changes files (cp, sed -i, sort -o, git commit, Write, Edit, ...)
+#   delete   removes files (rm, find -delete, git clean, ...)
+#   execute  runs code the guard cannot see (scripts, pytest via python -m, sudo, git -c, ...)
+#   network  reaches another host (curl, git push, pip install, ...)
+#   unknown  anything not recognised (make, npm, git aliases, project commands, unknown tools)
+# Output redirection is checked separately: read-only refuses it, confirm-writes asks for it
+# outside the run's output directory. Agents without a write mode keep the harness defaults
+# (workspace-write). Everything else in this file still applies in every mode.
+write_modes:
+  read-only:          {allow: [read], otherwise: deny, shell: true}
+  documentation-only: {allow: [read, write], otherwise: deny, shell: false}    # writes: documentation paths only
+  confirm-writes:     {allow: [read], otherwise: approve, shell: true}
+  workspace-write:    {allow: [read, write, delete, execute, network, unknown], otherwise: deny, shell: true}
+
+paths:
+  deny:
+    - "**/.env"
+    - "**/.env.*"
+    - "**/*.pem"
+    - "**/*.key"
+    - "**/secrets/**"
+
+# Bash command rules, enforced by the harness PreToolUse hook (Phase 2). Regexes are
+# searched in the whole command line. `deny` always blocks. `require_approval`
+# blocks unless the configured approver (a human, via `--approve interactive`)
+# allows that one call; the default non-interactive approver denies. Denied path
+# globs above are also checked against every command token.
+# Single-quoted YAML: backslashes are literal.
+commands:
+  deny:
+    - id: dump-environment
+      regex: '(?i)(^|[;&|(]\s*)(env|printenv|export\s+-p|set)\s*($|[;&|)>])|\$env:|\b(gci|Get-ChildItem|dir|ls)\s+env:|os\.environ|process\.env'
+      description: Environment variables can hold API keys and credentials.
+    - id: read-credential-stores
+      regex: '(?i)(\.ssh/|\.aws/credentials|\.netrc|\.pgpass|\.docker/config\.json|\.claude/\.credentials|\.git-credentials|\.npmrc|\.pypirc)'
+      description: Credential stores are never read by an agent.
+    - id: pipe-download-to-shell
+      regex: '(?i)\b(curl|wget|iwr|Invoke-WebRequest)\b[^\n]*\|\s*(ba|z|da)?sh\b|\biex\b'
+      description: Executing downloaded code.
+  require_approval:
+    - id: network-access
+      regex: '(?i)\b(curl|wget|nc|ncat|netcat|ssh|scp|sftp|rsync|ftp|telnet|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\b|\bgit\s+(clone|fetch|pull|push|remote\s+add|ls-remote)\b|\b(pip3?|npm|npx|yarn|pnpm|poetry|uv|uvx|pipx)\s+(install|add|sync|exec)\b|\bnpx\s'
+      description: Network access from the shell (downloads, uploads, package installs, git remotes).
+    - id: recursive-delete
+      regex: '(?i)\brm\s+(-[a-z]*[rf][a-z]*\s+)*-[a-z]*[rR]|\brm\s+--recursive|Remove-Item\b[^\n]*-Recurse|\brmdir\s+/s|\bdel\s+/[sq]|\brd\s+/s|\bshutil\.rmtree'
+      description: Recursive or forced deletion.
+    - id: git-history-rewrite
+      regex: '(?i)\bgit\s+(reset\s+--hard|clean\s+-[a-z]*f|checkout\s+--\s|restore\s|rebase|filter-branch|filter-repo|branch\s+-D|stash\s+(drop|clear)|commit|tag\s+-d)\b'
+      description: Discarding work, rewriting history or creating commits.
+    - id: database-destructive
+      regex: '(?i)\b(drop\s+(table|database|schema|index)|truncate\s+(table\s+)?\w|delete\s+from\s+\w+\s*(;|$))|manage\.py\s+(flush|migrate|sqlflush|reset_db|dbshell|loaddata)\b'
+      description: Destructive SQL or Django commands that change a database.
+    - id: privilege-or-system
+      regex: '(?i)\b(sudo|su|chown|mkfs|shutdown|reboot|systemctl|launchctl)\b|\bchmod\s+(-R\s+)?[0-7]*7[0-7]{2}\b|\bdd\s+if=|\bformat\s+[a-z]:'
+      description: Privilege escalation, permission widening and system-level commands.
+
+# Bash execution (Phase 5.1). Every command is parsed (core/shell_syntax.py) and checked by the
+# PreToolUse guard: redirections, path operands, globs, nested shells and substitutions. That is
+# policy, not isolation. The filesystem boundary for Bash is the Claude Code OS sandbox (macOS,
+# Linux with bubblewrap and socat): writes only to the workspace and the run's output directory,
+# no unsandboxed fallback. Where no sandbox is available (Windows), Bash is never run unrestricted:
+#   without_sandbox: disable   Bash is removed from the session (default, fail closed)
+#   without_sandbox: approve   every Bash call goes to the approver (the default approver denies)
+shell:
+  without_sandbox: disable
+  allowed_domains: []                 # network access of sandboxed commands (none)
+  # Deleting files always needs approval (as do `find -delete` and `find -exec <one of these>`).
+  destructive_programs: [rm, rmdir, unlink, shred, truncate, srm, wipe]
+  # Expanding a variable whose name matches is denied ($ANTHROPIC_API_KEY, ${DB_PASSWORD}, ...).
+  sensitive_variables: '(?i)(KEY|TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|COOKIE|SESSION|PRIVATE|DSN|DATABASE_URL)'
+
+# Environment of the Claude Code CLI and of every command it runs (Phase 5.1). Only `allow` and
+# `credentials` keep their values; every other variable of the operator's environment (cloud keys,
+# database URLs, tokens of other tools) reaches the CLI empty. `credentials` are for the CLI's own
+# authentication only: they are passed only when set, commands cannot expand them
+# (shell.sensitive_variables) and the CLI is asked to strip them from its subprocesses. A Claude
+# Code login (~/.claude) needs none. Bedrock or Vertex: list their variables here explicitly.
+environment:
+  allow: [PATH, HOME, USER, LOGNAME, SHELL, LANG, LANGUAGE, LC_ALL, LC_CTYPE, TERM, TMPDIR, TZ,
+          XDG_CONFIG_HOME, XDG_CACHE_HOME, XDG_DATA_HOME, XDG_RUNTIME_DIR,
+          SYSTEMROOT, SYSTEMDRIVE, WINDIR, COMSPEC, PATHEXT, TEMP, TMP, USERPROFILE, USERNAME, USERDOMAIN,
+          HOMEDRIVE, HOMEPATH, APPDATA, LOCALAPPDATA, PROGRAMDATA, PROGRAMFILES, "PROGRAMFILES(X86)",
+          PROGRAMW6432, COMMONPROGRAMFILES, "COMMONPROGRAMFILES(X86)", COMMONPROGRAMW6432, ALLUSERSPROFILE,
+          PUBLIC, OS, PROCESSOR_ARCHITECTURE, NUMBER_OF_PROCESSORS,
+          HTTP_PROXY, HTTPS_PROXY, NO_PROXY, http_proxy, https_proxy, no_proxy,
+          NODE_EXTRA_CA_CERTS, SSL_CERT_FILE, SSL_CERT_DIR, REQUESTS_CA_BUNDLE,
+          CLAUDE_CONFIG_DIR, CLAUDE_CODE_GIT_BASH_PATH, ANTHROPIC_BASE_URL, ANTHROPIC_MODEL,
+          CLAUDE_CODE_SUBAGENT_MODEL, DISABLE_TELEMETRY, DISABLE_ERROR_REPORTING,
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, PYTHONIOENCODING, PYTHONUTF8, DJANGO_SETTINGS_MODULE]
+  credentials: [ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN, CLAUDE_CODE_OAUTH_TOKEN]
+
+# Masked in tool output, results, logs and approval prompts. Redaction is a second line of
+# defence: denied paths, the environment allow-list and the sandbox keep secrets out first.
+secrets:
+  patterns:
+    - id: aws-access-key-id
+      regex: "AKIA[0-9A-Z]{16}"
+    - id: aws-temporary-access-key-id
+      regex: "\\bASIA[0-9A-Z]{16}\\b"
+    - id: aws-secret-access-key
+      regex: "(?i)aws_?secret_?access_?key[\"']?\\s*[:=]\\s*[\"']?[A-Za-z0-9/+=]{40}"
+    - id: django-secret-key
+      regex: "(?i)SECRET_KEY\\s*=\\s*['\"][^'\"]{20,}['\"]"
+    - id: private-key-block
+      regex: "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\\Z)"
+    - id: bearer-token
+      regex: "(?i)bearer\\s+[a-z0-9._~+/-]{20,}=*"
+    - id: anthropic-api-key
+      regex: "\\bsk-ant-[A-Za-z0-9_-]{20,}"
+    - id: github-token
+      regex: "\\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})"
+    - id: slack-token
+      regex: "\\bxox[abposr]-[A-Za-z0-9-]{10,}|https://hooks\\.slack\\.com/services/[A-Za-z0-9/_-]+"
+    - id: url-credentials
+      regex: "(?i)\\b[a-z][a-z0-9+.-]*://[^\\s/:@'\"]+:[^\\s/@'\"]+@"
+    - id: google-api-key
+      regex: "\\bAIza[0-9A-Za-z_-]{35}"
+    - id: azure-storage-key
+      regex: "(?i)AccountKey=[A-Za-z0-9+/=]{40,}"
+    - id: jwt
+      regex: "\\beyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}"
+    - id: package-registry-token
+      regex: "\\b(?:npm_[A-Za-z0-9]{36}|pypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,})"
+    - id: secret-env-assignment
+      regex: "(?m)^\\s*(?:export\\s+)?[A-Z][A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|ACCESS_KEY|PRIVATE_KEY)[A-Z0-9_]*=['\"]?[^\\s'\"]{6,}"
+
+redaction:
+  enabled: true
+  replacement: "[REDACTED]"
+
+artifacts:
+  max_inline_bytes: 4096   # larger context must be passed by reference, not inline

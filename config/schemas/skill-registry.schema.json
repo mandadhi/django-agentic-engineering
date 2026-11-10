@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/config/skill-registry.schema.json",
+  "title": "SkillRegistry",
+  "type": "object",
+  "required": ["schema_version", "kind", "skills"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "../contracts/common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "SkillRegistry" },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "path"],
+        "additionalProperties": false,
+        "description": "Harness data only. The description is read from SKILL.md; id must equal its frontmatter 'name'.",
+        "properties": {
+          "id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" },
+          "source": { "enum": ["plugin", "local", "project"] },
+          "path": { "type": "string", "minLength": 1, "description": "Skill directory containing SKILL.md, relative to paths.repo_root, or to the plugin root when `plugin` is set." },
+          "plugin": { "$ref": "../contracts/common.schema.json#/$defs/Identifier", "description": "Registered plugin (agent-registry `plugins`) that holds the skill (source must be 'plugin'); `path` is then relative to that plugin's root." },
+          "tags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+          "enabled": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

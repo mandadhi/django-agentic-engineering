@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/contracts/agent-task.schema.json",
+  "title": "AgentTask",
+  "description": "The single input contract every agent receives: what to do, with which context, under which constraints, producing which outputs.",
+  "type": "object",
+  "required": ["schema_version", "kind", "task_id", "agent_id", "objective", "context", "expected_outputs", "created_at"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "AgentTask" },
+    "task_id": { "$ref": "common.schema.json#/$defs/RunId" },
+    "agent_id": { "$ref": "common.schema.json#/$defs/Identifier" },
+    "execution_id": { "$ref": "common.schema.json#/$defs/RunId" },
+    "workflow_id": { "$ref": "common.schema.json#/$defs/Identifier" },
+    "stage_id": { "$ref": "common.schema.json#/$defs/Identifier" },
+    "attempt": { "type": "integer", "minimum": 1, "default": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "context": {
+      "type": "object",
+      "required": ["token_budget"],
+      "additionalProperties": false,
+      "properties": {
+        "refs": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/ContextRef" } },
+        "inline": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/InlineContext" } },
+        "summary": { "type": "string", "description": "Summary standing in for context that did not fit the budget." },
+        "token_budget": { "$ref": "common.schema.json#/$defs/TokenBudget" }
+      }
+    },
+    "constraints": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/Constraint" } },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "ref"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["task", "stage", "artifact"] },
+          "ref": { "type": "string", "minLength": 1 },
+          "required": { "type": "boolean", "default": true }
+        }
+      }
+    },
+    "expected_outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/$defs/ExpectedOutput" }
+    },
+    "created_at": { "$ref": "common.schema.json#/$defs/Timestamp" },
+    "extensions": { "$ref": "common.schema.json#/$defs/Extensions" }
+  }
+}

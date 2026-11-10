@@ -1,0 +1,250 @@
+# Agents the harness can schedule. Agents are Markdown files (Claude Code subagent
+# format); this registry holds only what the harness adds on top of them:
+# where the file is, its harness role, the skills to preload and its context needs.
+#
+# Everything the agent file declares itself (name, description, tools,
+# disallowedTools, model, sdlc_phase) is read from its frontmatter — never repeated
+# here. `id` must equal the file's frontmatter `name` (Claude Code / the Agent SDK
+# dispatch by that name, and hooks report it as `agent_type`).
+#
+# Phase 1 registers existing, reviewed plugin agents (source: plugin); nothing is
+# copied. Phase 3B adds the Django engineering agents; Phase 3C appends the Django
+# engineering rules (skill-registry entries tagged `rule`, under rules/) to each Django
+# agent's `skills` after a `# rules` comment. django-security-standards applies to every
+# Django agent. Phase 5 registers the Django Engineering Pack as the `django-engineering`
+# plugin (below), so the nine agents and their skills and rules load from the canonical
+# pack files through the same SDK plugin mechanism as every other plugin.
+#
+# `path` is relative to framework-config paths.repo_root, or to the plugin root when the
+# entry names its `plugin`, and must exist.
+# `skills` must reference ids in skill-registry.yaml (maps to AgentDefinition.skills).
+# This list is the single source of the agent -> skill/rule mapping: the `skills:` line in
+# each Django agent's frontmatter (used by the standalone plugin) is generated from it by
+# `python -m plugin_packaging build`.
+schema_version: "1.0"
+kind: AgentRegistry
+
+# Plugin directories the Agent SDK may load (Phase 2). Nothing else is ever passed
+# to the SDK's `plugins` option. `id` must equal the plugin's
+# .claude-plugin/plugin.json `name`: the SDK namespaces plugin skills as
+# `<id>:<skill>`. Every agent/skill below with `source: plugin` must live in one of
+# these directories (`core.cli validate` reports `unregistered-plugin` otherwise).
+# preload_skills (Phase 5.1, every plugin): the harness injects each registered SKILL.md into the
+#   agent itself; the CLI does not preload AgentDefinition.skills for a session run with --agent
+#   (measured, CLI 2.1.317). Every agent runs under the harness name dae-<id>, so a plugin's
+#   same-named agent file can never replace the harness definition.
+plugins:
+  - { id: security, path: plugins/security, preload_skills: true }
+  - { id: database, path: plugins/database, preload_skills: true }
+  - { id: api, path: plugins/api, preload_skills: true }
+  - { id: pr-automation, path: plugins/pr-automation, preload_skills: true }
+  # Django Engineering Pack (Phase 5). The harness root is the plugin root, so `base: harness`
+  # resolves it from the harness installation, wherever this project is checked out.
+  # read_paths: what its agents may read at run time (never config/, var/ or .venv/).
+  # agent_policy: the pack's canonical per-agent write modes; the harness enforces them with
+  #   its own guard. load_hooks false: the pack's standalone guard (hooks/hooks.json) is not
+  #   loaded in harness sessions, where its `ask` answers would override the harness approver.
+  # preload_skills: see above.
+  - id: django-engineering
+    path: .
+    base: harness
+    read_paths: [templates, references, skills, rules]
+    agent_policy: plugin_packaging/standalone-security.yaml
+    load_hooks: false
+    preload_skills: true
+
+agents:
+  - id: threat-modeler
+    source: plugin
+    path: plugins/security/agents/threat-modeler.md
+    role: architect
+    skills: [owasp-top10-review]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [architecture, security]
+      token_budget: 24000
+
+  - id: security-sast-engineer
+    source: plugin
+    path: plugins/security/agents/security-sast-engineer.md
+    role: engineer
+    skills: [security-scan-gates, owasp-top10-review]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, security]
+
+  - id: secrets-scanner
+    source: plugin
+    path: plugins/security/agents/secrets-scanner.md
+    role: reviewer
+    skills: [secret-detection-patterns]
+    context_needs:
+      scopes: [project, task]
+      tags: [code]
+      token_budget: 12000
+
+  - id: security-auditor
+    source: plugin
+    path: plugins/security/agents/security-auditor.md
+    role: reviewer
+    skills: [owasp-top10-review, security-scan-gates]
+    context_needs:
+      scopes: [project, workflow, task, agent]
+      tags: [code, security]
+
+  - id: db-schema-designer
+    source: plugin
+    path: plugins/database/agents/db-schema-designer.md
+    role: architect
+    skills: [db-schema-conventions]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [data-model]
+
+  - id: db-migration-engineer
+    source: plugin
+    path: plugins/database/agents/db-migration-engineer.md
+    role: engineer
+    skills: [db-migration-playbook, db-schema-conventions]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [data-model, migrations]
+
+  - id: api-contract-designer
+    source: plugin
+    path: plugins/api/agents/api-contract-designer.md
+    role: architect
+    skills: [api-design-standards, api-versioning-policy]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [api]
+
+  - id: pr-reviewer
+    source: plugin
+    path: plugins/pr-automation/agents/pr-reviewer.md
+    role: reviewer
+    skills: [pr-review-standards, pr-diff-hygiene]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code]
+
+  # ---- Django engineering agents (Phase 3B; plugin django-engineering since Phase 5) ---
+  - id: django-project-analyzer
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-project-analyzer.md
+    role: analyst
+    skills: [django-core, django-architecture, django-orm,
+             # rules
+             django-security-standards, django-project-structure, django-configuration-standards,
+             django-dependency-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, architecture]
+
+  - id: django-architecture-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-architecture-agent.md
+    role: architect
+    skills: [django-core, django-architecture, django-security-engineering,
+             # rules
+             django-security-standards, django-project-structure, django-configuration-standards,
+             django-logging-standards, django-documentation-standards, django-dependency-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [architecture, security]
+
+  - id: django-model-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-model-agent.md
+    role: engineer
+    skills: [django-orm, postgresql-engineering, django-architecture,
+             # rules
+             django-security-standards, django-model-standards, django-database-standards,
+             django-coding-standards, django-testing-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, data-model, migrations]
+
+  - id: django-api-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-api-agent.md
+    role: engineer
+    skills: [django-rest-framework, django-security-engineering, django-orm,
+             # rules
+             django-security-standards, django-api-standards, django-coding-standards,
+             django-testing-standards, django-performance-standards, django-logging-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, api]
+
+  - id: django-security-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-security-agent.md
+    role: reviewer
+    skills: [django-security-engineering, django-rest-framework, django-integrations,
+             # rules
+             django-security-standards, django-configuration-standards, django-logging-standards,
+             django-dependency-standards, django-api-standards, django-coding-standards,
+             django-testing-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, security]
+
+  - id: django-testing-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-testing-agent.md
+    role: tester
+    skills: [django-testing, django-core, django-rest-framework,
+             # rules
+             django-security-standards, django-testing-standards, django-coding-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, testing]
+
+  - id: django-performance-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-performance-agent.md
+    role: engineer
+    skills: [django-performance, django-orm, postgresql-engineering,
+             # rules
+             django-security-standards, django-performance-standards, django-database-standards,
+             django-coding-standards, django-testing-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, performance, data-model]
+
+  - id: django-documentation-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-documentation-agent.md
+    role: writer
+    skills: [django-core, django-architecture, django-rest-framework,
+             # rules
+             django-security-standards, django-documentation-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code, architecture, api]
+
+  # Skills are applied selectively per changed file (see the agent's skill table).
+  - id: django-code-review-agent
+    source: plugin
+    plugin: django-engineering
+    path: agents/django-code-review-agent.md
+    role: reviewer
+    skills: [django-core, django-architecture, django-orm, django-rest-framework,
+             django-security-engineering, django-testing, django-performance,
+             # rules
+             django-security-standards, django-project-structure, django-coding-standards,
+             django-model-standards, django-api-standards, django-database-standards,
+             django-testing-standards, django-performance-standards, django-configuration-standards,
+             django-logging-standards, django-documentation-standards, django-dependency-standards]
+    context_needs:
+      scopes: [project, workflow, task]
+      tags: [code]

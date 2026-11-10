@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/contracts/workflow-stage.schema.json",
+  "title": "WorkflowStage",
+  "description": "One step of a workflow: a single agent, its objective, its upstream dependencies and its expected outputs. Omitted execution settings fall back to workflow-config defaults.",
+  "type": "object",
+  "required": ["id", "agent_id", "objective", "expected_outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/Identifier" },
+    "name": { "type": "string" },
+    "description": { "type": "string" },
+    "agent_id": { "$ref": "common.schema.json#/$defs/Identifier" },
+    "objective": { "type": "string", "minLength": 1 },
+    "depends_on": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "common.schema.json#/$defs/Identifier" }
+    },
+    "constraints": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/Constraint" } },
+    "expected_outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/$defs/ExpectedOutput" }
+    },
+    "context": {
+      "type": "object",
+      "description": "Narrows the agent's registered context_needs for this stage.",
+      "additionalProperties": false,
+      "properties": {
+        "scopes": { "type": "array", "uniqueItems": true, "items": { "$ref": "common.schema.json#/$defs/ContextScope" } },
+        "tags": { "type": "array", "uniqueItems": true, "items": { "type": "string" } },
+        "token_budget": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "uniqueItems": true,
+      "description": "Workflow inputs this stage needs. Each must be declared in the workflow's inputs.properties and must be supplied when an execution starts. Their values are passed to the agent in AgentTask.extensions['dae.inputs'].",
+      "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }
+    },
+    "approval_required": { "type": "boolean", "description": "Human-in-the-loop gate: stage waits in awaiting_approval after completing." },
+    "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "timeout_seconds": { "type": "integer", "minimum": 1 },
+    "extensions": { "$ref": "common.schema.json#/$defs/Extensions" }
+  }
+}

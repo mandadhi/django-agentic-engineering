@@ -1,0 +1,46 @@
+# Root configuration of the Django Agentic Engineering Harness.
+# Every other configuration file is located through `configs` below — application
+# code never hardcodes their names. Relative paths resolve against the harness root
+# (the folder containing config/).
+schema_version: "1.0"
+kind: FrameworkConfig
+
+framework:
+  name: django-agentic-engineering
+  version: 0.1.0
+
+paths:
+  repo_root: ../..               # agent/skill registry paths are relative to this
+  contracts_dir: contracts
+  artifacts_dir: var/artifacts   # large AI-generated outputs live here, not in the DB
+
+configs:
+  agent_registry: config/agent-registry.yaml
+  skill_registry: config/skill-registry.yaml
+  workflow: config/workflow-config.yaml
+  evaluation: config/evaluation-config.yaml
+  security: config/security-config.yaml
+
+storage:
+  backend: sqlite                # only sqlite in Phase 1; the store sits behind ExecutionStore
+  sqlite:
+    path: var/harness.db
+  max_json_bytes: 65536          # cap on any JSON metadata column (task, result, checkpoint)
+
+logging:
+  level: INFO
+  format: json                   # json | text
+
+# Harness limits for one Agent SDK query (= one workflow stage). The agent's own
+# instructions, model and tools are read from its Markdown, never from here.
+agent_runtime:
+  max_turns: 60
+  max_budget_usd: 10.0           # per stage attempt; the SDK stops with error_max_budget_usd
+  max_agent_seconds: 3600        # a stage's timeout_seconds can only lower this
+  hook_timeout_seconds: 600      # includes waiting for a human approval
+  structured_output: true        # request AgentResult via --json-schema
+
+context:
+  default_token_budget: 32000
+  reserve_tokens: 4000
+  chars_per_token: 4

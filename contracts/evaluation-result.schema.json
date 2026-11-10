@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/contracts/evaluation-result.schema.json",
+  "title": "EvaluationResult",
+  "description": "Outcome of scoring an agent run, a stage or a whole workflow execution against the criteria in evaluation-config.yaml.",
+  "type": "object",
+  "required": ["schema_version", "kind", "evaluation_id", "target", "evaluator", "criteria", "overall", "evaluated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "EvaluationResult" },
+    "evaluation_id": { "$ref": "common.schema.json#/$defs/RunId" },
+    "execution_id": { "$ref": "common.schema.json#/$defs/RunId" },
+    "target": {
+      "type": "object",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "enum": ["agent", "stage", "workflow"] },
+        "id": { "type": "string", "minLength": 1, "description": "agent id, workflow id, or '<workflow>/<stage>'" },
+        "run_id": { "$ref": "common.schema.json#/$defs/RunId" }
+      }
+    },
+    "evaluator": { "type": "string", "minLength": 1, "description": "Scorer that produced this result (rule id, model id, human reviewer)." },
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["criterion_id", "score", "passed"],
+        "additionalProperties": false,
+        "properties": {
+          "criterion_id": { "$ref": "common.schema.json#/$defs/Identifier" },
+          "score": { "type": "number", "minimum": 0, "maximum": 1 },
+          "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+          "passed": { "type": "boolean" },
+          "rationale": { "type": "string" },
+          "evidence": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/ArtifactRef" } }
+        }
+      }
+    },
+    "overall": {
+      "type": "object",
+      "required": ["score", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "evaluated_at": { "$ref": "common.schema.json#/$defs/Timestamp" },
+    "extensions": { "$ref": "common.schema.json#/$defs/Extensions" }
+  }
+}

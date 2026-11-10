@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/config/security-config.schema.json",
+  "title": "SecurityConfig",
+  "type": "object",
+  "required": ["schema_version", "kind", "tools", "artifacts"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "../contracts/common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "SecurityConfig" },
+    "tools": {
+      "type": "object",
+      "description": "Deny-only layer over each agent's own tools/disallowedTools frontmatter.",
+      "additionalProperties": false,
+      "properties": {
+        "deny": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "agents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["agent_id"],
+            "anyOf": [{ "required": ["deny"] }, { "required": ["write_mode"] }],
+            "additionalProperties": false,
+            "properties": {
+              "agent_id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" },
+              "deny": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+              "write_mode": { "$ref": "#/$defs/WriteMode", "description": "Harness-enforced write mode (SEC-05). Combined with a plugin agent_policy mode, the stricter applies." }
+            }
+          }
+        }
+      }
+    },
+    "write_modes": {
+      "type": "object",
+      "description": "Capabilities each write mode grants (SEC-06). Not listed: refused (deny) or approval required (approve).",
+      "additionalProperties": false,
+      "properties": {
+        "read-only": { "$ref": "#/$defs/ModeCapabilities" },
+        "documentation-only": { "$ref": "#/$defs/ModeCapabilities" },
+        "confirm-writes": { "$ref": "#/$defs/ModeCapabilities" },
+        "workspace-write": { "$ref": "#/$defs/ModeCapabilities" }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deny": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "description": "Rules applied by the PreToolUse hook to Bash commands. 'deny' always blocks; 'require_approval' blocks unless a human approves the call.",
+      "additionalProperties": false,
+      "properties": {
+        "deny": { "type": "array", "items": { "$ref": "#/$defs/CommandRule" } },
+        "require_approval": { "type": "array", "items": { "$ref": "#/$defs/CommandRule" } }
+      }
+    },
+    "shell": {
+      "type": "object",
+      "description": "How Bash may run (Phase 5.1). Command analysis is policy; the filesystem boundary is the Claude Code OS sandbox (macOS/Linux).",
+      "additionalProperties": false,
+      "properties": {
+        "without_sandbox": { "enum": ["disable", "approve"], "description": "Where no OS sandbox is available: remove Bash from the session (disable) or send every Bash call to the approver (approve)." },
+        "allowed_domains": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "destructive_programs": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "sensitive_variables": { "type": "string", "minLength": 1, "description": "Python regex: shell variables whose expansion is denied." }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Environment of the Claude Code CLI and every command it runs (Phase 5.1). Unlisted variables never reach it.",
+      "additionalProperties": false,
+      "properties": {
+        "allow": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_()]*$" } },
+        "credentials": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" } }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "regex"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" },
+              "regex": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "redaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "replacement": { "type": "string" }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["max_inline_bytes"],
+      "additionalProperties": false,
+      "properties": {
+        "max_inline_bytes": { "type": "integer", "minimum": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "CommandRule": {
+      "type": "object",
+      "required": ["id", "regex"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" },
+        "regex": { "type": "string", "minLength": 1, "description": "Python regular expression searched in the full command line." },
+        "description": { "type": "string" }
+      }
+    },
+    "WriteMode": { "enum": ["read-only", "documentation-only", "confirm-writes", "workspace-write"] },
+    "ModeCapabilities": {
+      "type": "object",
+      "required": ["allow", "otherwise"],
+      "additionalProperties": false,
+      "properties": {
+        "allow": { "type": "array", "uniqueItems": true,
+                   "items": { "enum": ["read", "write", "delete", "execute", "network", "unknown"] } },
+        "otherwise": { "enum": ["deny", "approve"] },
+        "shell": { "type": "boolean", "default": true, "description": "false: Bash is refused in this mode." }
+      }
+    }
+  }
+}

@@ -1,0 +1,77 @@
+# Standalone Claude Code plugin security policy (Phase 4). Canonical, hand-maintained.
+#
+# The harness enforces config/security-config.yaml through the Agent SDK (agent_runtime/).
+# When the pack runs as a Claude Code plugin there is no harness, so the plugin's own
+# PreToolUse/PostToolUse hook (hooks/django_pack_guard.py) enforces a policy built from:
+#   1. config/security-config.yaml       tool denies, denied paths, command rules, secret patterns
+#                                        (reused as-is; never weakened, never edited for the plugin)
+#   2. agents/<id>.md frontmatter `tools` each agent's declared tools (the ceiling; nothing is granted)
+#   3. this file                          what only the standalone plugin needs: each agent's write mode,
+#                                        documentation paths and read-only shell rules
+# `python -m plugin_packaging build` writes the result to hooks/security-policy.json;
+# `python -m plugin_packaging check` (and tests/test_plugin_packaging.py) fail on drift.
+#
+# Since Phase 5 the harness also reads `agents`, `documentation_paths` and `read_only_commands`
+# from this file (agent-registry `agent_policy` of the django-engineering plugin) and enforces them
+# with its own guard (agent_runtime/security_hooks.py). It never runs the standalone guard.
+#
+# Like the harness policy, this can only take capabilities away. It applies to calls made
+# by the pack's agents (hook input `agent_type` = `django-engineering:<agent id>`, or the bare
+# agent id); other agents and the user's main session are left to Claude Code's own permissions.
+schema_version: "1.0"
+kind: PluginSecurityPolicy
+plugin: django-engineering
+
+# Write modes:
+#   read-only          no file writes; shell limited by read_only_commands below
+#   documentation-only file writes only to documentation_paths inside the project; no shell
+#   confirm-writes     every file write needs the user's explicit confirmation ("ask"),
+#                      so code changes happen only when the user approves them
+#   workspace-write    file writes inside the project directory only
+agents:
+  django-project-analyzer: read-only
+  django-code-review-agent: read-only
+  django-documentation-agent: documentation-only
+  django-security-agent: confirm-writes
+  django-architecture-agent: workspace-write
+  django-model-agent: workspace-write
+  django-api-agent: workspace-write
+  django-testing-agent: workspace-write
+  django-performance-agent: workspace-write
+
+# Paths (relative to the project directory) the documentation agent may write. These follow
+# agents/django-documentation-agent.md ("docs/, README*, *.md") plus the documentation formats
+# and tool configs it names (Sphinx, MkDocs). Plain *.txt is excluded: requirements*.txt is code.
+documentation_paths:
+  - "docs/**"
+  - "doc/**"
+  - "**/*.md"
+  - "**/*.rst"
+  - "**/*.adoc"
+  - "**/README*"
+  - "**/CHANGELOG*"
+  - "mkdocs.yml"
+  - "mkdocs.yaml"
+
+# Shell commands that change state. Denied outright for read-only agents (on top of the
+# harness command rules, which apply to every pack agent). Python regexes, searched in the
+# whole command line. Output redirection to a file is also denied for read-only agents.
+# Since SEC-06 this block-list is a second check only: what a mode may do is the default-deny
+# capability table in config/security-config.yaml (`write_modes`), applied to every command
+# classified by effect. A command these rules miss is still refused unless it is a known read.
+read_only_commands:
+  - id: file-change-command
+    regex: '(?i)(^|[;&|(`]\s*|\$\(\s*)(sudo\s+)?(rm|mv|cp|mkdir|rmdir|touch|tee|truncate|ln|unlink|shred|install|patch|chmod|chown|dd)\b'
+    description: Creates, moves, copies, deletes or modifies files.
+  - id: in-place-edit
+    regex: '(?i)\bsed\s+(-[a-z]*i|--in-place)|\bperl\s+-[a-z]*i'
+    description: Edits files in place.
+  - id: git-write
+    regex: '(?i)\bgit\s+(add|commit|checkout|switch|reset|restore|clean|stash|merge|rebase|cherry-pick|revert|apply|am|push|pull|fetch|tag|rm|mv|init|clone|config|worktree|submodule|gc|prune|update-ref|notes|branch\s+-[a-z]*[dDmMcC])\b'
+    description: Changes the repository (only status, diff, log, show and similar reads are allowed).
+  - id: django-write
+    regex: '(?i)manage\.py\s+(makemigrations|migrate|squashmigrations|flush|loaddata|dumpdata|createsuperuser|changepassword|collectstatic|startapp|startproject|shell|dbshell|clearsessions|makemessages|compilemessages|createcachetable|runserver)\b'
+    description: Django management commands that write files or data, or open an interactive shell.
+  - id: package-change
+    regex: '(?i)\b(pip3?|uv|poetry|pipenv|pdm|npm|yarn|pnpm)\s+(install|uninstall|add|remove|sync|lock|update|upgrade)\b'
+    description: Changes installed packages or lock files.

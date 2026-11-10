@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/contracts/common.schema.json",
+  "title": "Common definitions",
+  "description": "Building blocks shared by every harness contract. Not a contract on its own.",
+  "$defs": {
+    "SchemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "description": "Contract version (major.minor). A major bump is a breaking change."
+    },
+    "Identifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$",
+      "description": "Lower-case id used for agents, skills, workflows, stages, criteria."
+    },
+    "RunId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "description": "Opaque id for tasks, executions, runs and evaluations (usually a UUID)."
+    },
+    "Timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 timestamp, UTC recommended."
+    },
+    "Extensions": {
+      "type": "object",
+      "description": "Free-form, namespaced data for features not yet in the contract. Keys should be prefixed (e.g. 'django.migrations').",
+      "additionalProperties": true
+    },
+    "ContextScope": {
+      "enum": ["project", "workflow", "task", "agent"]
+    },
+    "ArtifactRef": {
+      "type": "object",
+      "description": "Pointer to an artifact stored outside the execution database. Never carries the content itself.",
+      "required": ["uri"],
+      "additionalProperties": false,
+      "properties": {
+        "uri": { "type": "string", "minLength": 1, "description": "file://, s3://, repo-relative path, …" },
+        "media_type": { "type": "string", "description": "e.g. text/markdown, application/json, text/x-diff" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "description": { "type": "string" }
+      }
+    },
+    "ContextRef": {
+      "type": "object",
+      "description": "Reference to a piece of context the agent may load, with its token cost.",
+      "required": ["id", "scope", "uri"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "scope": { "$ref": "#/$defs/ContextScope" },
+        "uri": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "token_estimate": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "InlineContext": {
+      "type": "object",
+      "description": "Small context passed by value (size-capped by security-config artifacts.max_inline_bytes).",
+      "required": ["id", "scope", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "scope": { "$ref": "#/$defs/ContextScope" },
+        "content": { "type": "string" },
+        "token_estimate": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "TokenBudget": {
+      "type": "object",
+      "required": ["total"],
+      "additionalProperties": false,
+      "properties": {
+        "total": { "type": "integer", "minimum": 1, "description": "Maximum tokens the agent may spend on context." },
+        "reserved": { "type": "integer", "minimum": 0, "description": "Held back for instructions and the response." },
+        "used": { "type": "integer", "minimum": 0, "description": "Tokens consumed by the assembled context." }
+      }
+    },
+    "Constraint": {
+      "type": "object",
+      "required": ["id", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/Identifier" },
+        "description": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["must", "should"], "default": "must" }
+      }
+    },
+    "ExpectedOutput": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/Identifier" },
+        "type": { "enum": ["file", "report", "patch", "json", "text"] },
+        "description": { "type": "string" },
+        "required": { "type": "boolean", "default": true },
+        "schema_ref": { "type": "string", "description": "Optional JSON Schema the output must satisfy." }
+      }
+    },
+    "Error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "message": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean", "default": false },
+        "details": { "type": "object" }
+      }
+    }
+  }
+}

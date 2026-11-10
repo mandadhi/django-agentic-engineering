@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/config/agent-registry.schema.json",
+  "title": "AgentRegistry",
+  "type": "object",
+  "required": ["schema_version", "kind", "agents"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "../contracts/common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "AgentRegistry" },
+    "plugins": {
+      "type": "array",
+      "description": "Claude Code plugin directories the Agent SDK may load. Only these are ever passed to the SDK; every agent or skill with source 'plugin' must live inside one of them.",
+      "items": {
+        "type": "object",
+        "required": ["id", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier", "description": "Must equal the 'name' in <path>/.claude-plugin/plugin.json (the SDK namespaces skills as '<id>:<skill>')." },
+          "path": { "type": "string", "minLength": 1, "description": "Plugin root, relative to `base`." },
+          "base": { "enum": ["repo_root", "harness"], "default": "repo_root", "description": "What `path` is relative to: paths.repo_root, or the harness installation (the folder holding core/), for a plugin that ships with the harness. The plugin must stay inside it." },
+          "read_paths": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Sub-folders of the plugin an agent may read at run time. Default: the whole plugin directory." },
+          "agent_policy": { "type": "string", "minLength": 1, "description": "PluginSecurityPolicy file (relative to the plugin root) whose per-agent write modes the harness enforces on this plugin's agents. It can only remove capabilities." },
+          "load_hooks": { "type": "boolean", "default": true, "description": "false: the plugin's own hooks are not loaded in harness sessions (the harness enforces agent_policy itself). Requires agent_policy." },
+          "preload_skills": { "type": "boolean", "default": false, "description": "true: the harness injects the full SKILL.md of each skill an agent registers from this plugin into the agent's instructions (the CLI does not preload AgentDefinition.skills for a session run with --agent; verified with CLI 2.1.317)." }
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "source", "path"],
+        "additionalProperties": false,
+        "description": "Harness data only. description, tools, model and sdlc_phase are read from the agent file's frontmatter; id must equal its 'name'.",
+        "properties": {
+          "id": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" },
+          "source": { "enum": ["plugin", "local", "project"], "description": "Where the definition lives: a plugin, this harness, or another inventory project." },
+          "path": { "type": "string", "minLength": 1, "description": "Agent markdown file, relative to paths.repo_root, or to the plugin root when `plugin` is set." },
+          "plugin": { "$ref": "../contracts/common.schema.json#/$defs/Identifier", "description": "Registered plugin that holds the file (source must be 'plugin'); `path` is then relative to that plugin's root." },
+          "role": { "enum": ["orchestrator", "architect", "engineer", "reviewer", "tester", "analyst", "writer"] },
+          "skills":{ "type": "array", "uniqueItems": true, "items": { "$ref": "../contracts/common.schema.json#/$defs/Identifier" } },
+          "context_needs": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scopes": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "../contracts/common.schema.json#/$defs/ContextScope" } },
+              "tags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+              "token_budget": { "type": "integer", "minimum": 1 }
+            }
+          },
+          "enabled": { "type": "boolean", "default": true }
+        }
+      }
+    }
+  }
+}

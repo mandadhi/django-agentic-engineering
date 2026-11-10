@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0",
+  "kind": "EvaluationResult",
+  "evaluation_id": "eval-55e0a1f7",
+  "execution_id": "exec-1b9d4c20",
+  "target": { "type": "stage", "id": "security-review/audit", "run_id": "run-0c8e2b11" },
+  "evaluator": "rule:contract-compliance",
+  "criteria": [
+    { "criterion_id": "contract-compliance", "score": 1.0, "threshold": 1.0, "passed": true },
+    { "criterion_id": "expected-outputs-present", "score": 1.0, "threshold": 1.0, "passed": true },
+    {
+      "criterion_id": "no-secrets-in-artifacts",
+      "score": 1.0,
+      "threshold": 1.0,
+      "passed": true,
+      "rationale": "No secret patterns matched in 1 artifact."
+    }
+  ],
+  "overall": { "score": 1.0, "passed": true },
+  "evaluated_at": "2026-11-03T10:16:40Z"
+}

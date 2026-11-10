@@ -1,0 +1,62 @@
+# Security review of an existing Django codebase, composed entirely of reused
+# plugin agents. Status is draft: it is a real, valid definition used to exercise
+# discovery, reference validation and the runtime, not yet a production workflow.
+schema_version: "1.0"
+kind: WorkflowDefinition
+id: security-review
+name: Django security review
+version: 0.1.0
+status: draft
+description: >-
+  Threat-model the application, run secret and static-analysis scans in parallel,
+  then audit against OWASP Top 10 with a human approval gate on the final report.
+
+inputs:
+  type: object
+  required: [repository]
+  properties:
+    repository: { type: string, description: Path or URL of the Django project }
+    branch: { type: string }
+
+stages:
+  - id: threat-model
+    name: Threat model
+    agent_id: threat-modeler
+    inputs: [repository]
+    objective: Produce a STRIDE threat model of the Django application's trust boundaries.
+    context:
+      tags: [architecture, security]
+    expected_outputs:
+      - { name: threat-model, type: report, description: STRIDE table plus data-flow diagram }
+
+  - id: secrets-scan
+    name: Secrets scan
+    agent_id: secrets-scanner
+    depends_on: [threat-model]
+    objective: Find committed credentials, keys and Django SECRET_KEY values.
+    constraints:
+      - { id: read-only, description: Do not modify source files. }
+    expected_outputs:
+      - { name: secrets-findings, type: json }
+
+  - id: sast
+    name: Static analysis
+    agent_id: security-sast-engineer
+    depends_on: [threat-model]
+    objective: Run static analysis (e.g. Bandit, Semgrep Django rules) and triage the findings.
+    expected_outputs:
+      - { name: sast-findings, type: json }
+
+  - id: audit
+    name: OWASP audit
+    agent_id: security-auditor
+    depends_on: [secrets-scan, sast]
+    inputs: [repository]
+    objective: Audit against OWASP Top 10 using upstream findings; produce a ranked report.
+    approval_required: true
+    max_attempts: 1
+    constraints:
+      - { id: read-only, description: Do not modify source files. }
+      - { id: cite-lines, description: Cite file and line for every finding., severity: should }
+    expected_outputs:
+      - { name: audit-report, type: report }

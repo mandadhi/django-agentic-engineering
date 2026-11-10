@@ -1,0 +1,326 @@
+{
+  "_generated": {
+    "by": "python -m plugin_packaging build",
+    "do_not_edit": "Edit the sources and rebuild; tests fail when this file drifts from them.",
+    "sources": [
+      "config/security-config.yaml",
+      "agents/<id>.md (frontmatter tools, disallowedTools)",
+      "config/agent-registry.yaml",
+      "plugin_packaging/standalone-security.yaml"
+    ]
+  },
+  "schema_version": "1.0",
+  "plugin": "django-engineering",
+  "tools_deny": [
+    "WebFetch",
+    "WebSearch"
+  ],
+  "paths_deny": [
+    "**/.env",
+    "**/.env.*",
+    "**/*.pem",
+    "**/*.key",
+    "**/secrets/**"
+  ],
+  "commands_deny": [
+    {
+      "id": "dump-environment",
+      "regex": "(?i)(^|[;&|(]\\s*)(env|printenv|export\\s+-p|set)\\s*($|[;&|)>])|\\$env:|\\b(gci|Get-ChildItem|dir|ls)\\s+env:|os\\.environ|process\\.env",
+      "description": "Environment variables can hold API keys and credentials."
+    },
+    {
+      "id": "read-credential-stores",
+      "regex": "(?i)(\\.ssh/|\\.aws/credentials|\\.netrc|\\.pgpass|\\.docker/config\\.json|\\.claude/\\.credentials|\\.git-credentials|\\.npmrc|\\.pypirc)",
+      "description": "Credential stores are never read by an agent."
+    },
+    {
+      "id": "pipe-download-to-shell",
+      "regex": "(?i)\\b(curl|wget|iwr|Invoke-WebRequest)\\b[^\\n]*\\|\\s*(ba|z|da)?sh\\b|\\biex\\b",
+      "description": "Executing downloaded code."
+    }
+  ],
+  "commands_require_approval": [
+    {
+      "id": "network-access",
+      "regex": "(?i)\\b(curl|wget|nc|ncat|netcat|ssh|scp|sftp|rsync|ftp|telnet|Invoke-WebRequest|Invoke-RestMethod|iwr|irm)\\b|\\bgit\\s+(clone|fetch|pull|push|remote\\s+add|ls-remote)\\b|\\b(pip3?|npm|npx|yarn|pnpm|poetry|uv|uvx|pipx)\\s+(install|add|sync|exec)\\b|\\bnpx\\s",
+      "description": "Network access from the shell (downloads, uploads, package installs, git remotes)."
+    },
+    {
+      "id": "recursive-delete",
+      "regex": "(?i)\\brm\\s+(-[a-z]*[rf][a-z]*\\s+)*-[a-z]*[rR]|\\brm\\s+--recursive|Remove-Item\\b[^\\n]*-Recurse|\\brmdir\\s+/s|\\bdel\\s+/[sq]|\\brd\\s+/s|\\bshutil\\.rmtree",
+      "description": "Recursive or forced deletion."
+    },
+    {
+      "id": "git-history-rewrite",
+      "regex": "(?i)\\bgit\\s+(reset\\s+--hard|clean\\s+-[a-z]*f|checkout\\s+--\\s|restore\\s|rebase|filter-branch|filter-repo|branch\\s+-D|stash\\s+(drop|clear)|commit|tag\\s+-d)\\b",
+      "description": "Discarding work, rewriting history or creating commits."
+    },
+    {
+      "id": "database-destructive",
+      "regex": "(?i)\\b(drop\\s+(table|database|schema|index)|truncate\\s+(table\\s+)?\\w|delete\\s+from\\s+\\w+\\s*(;|$))|manage\\.py\\s+(flush|migrate|sqlflush|reset_db|dbshell|loaddata)\\b",
+      "description": "Destructive SQL or Django commands that change a database."
+    },
+    {
+      "id": "privilege-or-system",
+      "regex": "(?i)\\b(sudo|su|chown|mkfs|shutdown|reboot|systemctl|launchctl)\\b|\\bchmod\\s+(-R\\s+)?[0-7]*7[0-7]{2}\\b|\\bdd\\s+if=|\\bformat\\s+[a-z]:",
+      "description": "Privilege escalation, permission widening and system-level commands."
+    }
+  ],
+  "secret_patterns": [
+    {
+      "id": "aws-access-key-id",
+      "regex": "AKIA[0-9A-Z]{16}"
+    },
+    {
+      "id": "aws-temporary-access-key-id",
+      "regex": "\\bASIA[0-9A-Z]{16}\\b"
+    },
+    {
+      "id": "aws-secret-access-key",
+      "regex": "(?i)aws_?secret_?access_?key[\"']?\\s*[:=]\\s*[\"']?[A-Za-z0-9/+=]{40}"
+    },
+    {
+      "id": "django-secret-key",
+      "regex": "(?i)SECRET_KEY\\s*=\\s*['\"][^'\"]{20,}['\"]"
+    },
+    {
+      "id": "private-key-block",
+      "regex": "-----BEGIN [A-Z ]*PRIVATE KEY-----[\\s\\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\\Z)"
+    },
+    {
+      "id": "bearer-token",
+      "regex": "(?i)bearer\\s+[a-z0-9._~+/-]{20,}=*"
+    },
+    {
+      "id": "anthropic-api-key",
+      "regex": "\\bsk-ant-[A-Za-z0-9_-]{20,}"
+    },
+    {
+      "id": "github-token",
+      "regex": "\\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{22,255})"
+    },
+    {
+      "id": "slack-token",
+      "regex": "\\bxox[abposr]-[A-Za-z0-9-]{10,}|https://hooks\\.slack\\.com/services/[A-Za-z0-9/_-]+"
+    },
+    {
+      "id": "url-credentials",
+      "regex": "(?i)\\b[a-z][a-z0-9+.-]*://[^\\s/:@'\"]+:[^\\s/@'\"]+@"
+    },
+    {
+      "id": "google-api-key",
+      "regex": "\\bAIza[0-9A-Za-z_-]{35}"
+    },
+    {
+      "id": "azure-storage-key",
+      "regex": "(?i)AccountKey=[A-Za-z0-9+/=]{40,}"
+    },
+    {
+      "id": "jwt",
+      "regex": "\\beyJ[A-Za-z0-9_-]{10,}\\.eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}"
+    },
+    {
+      "id": "package-registry-token",
+      "regex": "\\b(?:npm_[A-Za-z0-9]{36}|pypi-AgEIcHlwaS5vcmc[A-Za-z0-9_-]{50,})"
+    },
+    {
+      "id": "secret-env-assignment",
+      "regex": "(?m)^\\s*(?:export\\s+)?[A-Z][A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|ACCESS_KEY|PRIVATE_KEY)[A-Z0-9_]*=['\"]?[^\\s'\"]{6,}"
+    }
+  ],
+  "redaction": {
+    "enabled": true,
+    "replacement": "[REDACTED]"
+  },
+  "documentation_paths": [
+    "docs/**",
+    "doc/**",
+    "**/*.md",
+    "**/*.rst",
+    "**/*.adoc",
+    "**/README*",
+    "**/CHANGELOG*",
+    "mkdocs.yml",
+    "mkdocs.yaml"
+  ],
+  "read_only_commands": [
+    {
+      "id": "file-change-command",
+      "regex": "(?i)(^|[;&|(`]\\s*|\\$\\(\\s*)(sudo\\s+)?(rm|mv|cp|mkdir|rmdir|touch|tee|truncate|ln|unlink|shred|install|patch|chmod|chown|dd)\\b",
+      "description": "Creates, moves, copies, deletes or modifies files."
+    },
+    {
+      "id": "in-place-edit",
+      "regex": "(?i)\\bsed\\s+(-[a-z]*i|--in-place)|\\bperl\\s+-[a-z]*i",
+      "description": "Edits files in place."
+    },
+    {
+      "id": "git-write",
+      "regex": "(?i)\\bgit\\s+(add|commit|checkout|switch|reset|restore|clean|stash|merge|rebase|cherry-pick|revert|apply|am|push|pull|fetch|tag|rm|mv|init|clone|config|worktree|submodule|gc|prune|update-ref|notes|branch\\s+-[a-z]*[dDmMcC])\\b",
+      "description": "Changes the repository (only status, diff, log, show and similar reads are allowed)."
+    },
+    {
+      "id": "django-write",
+      "regex": "(?i)manage\\.py\\s+(makemigrations|migrate|squashmigrations|flush|loaddata|dumpdata|createsuperuser|changepassword|collectstatic|startapp|startproject|shell|dbshell|clearsessions|makemessages|compilemessages|createcachetable|runserver)\\b",
+      "description": "Django management commands that write files or data, or open an interactive shell."
+    },
+    {
+      "id": "package-change",
+      "regex": "(?i)\\b(pip3?|uv|poetry|pipenv|pdm|npm|yarn|pnpm)\\s+(install|uninstall|add|remove|sync|lock|update|upgrade)\\b",
+      "description": "Changes installed packages or lock files."
+    }
+  ],
+  "write_modes": {
+    "read-only": {
+      "allow": [
+        "read"
+      ],
+      "otherwise": "deny",
+      "shell": true
+    },
+    "documentation-only": {
+      "allow": [
+        "read",
+        "write"
+      ],
+      "otherwise": "deny",
+      "shell": false
+    },
+    "confirm-writes": {
+      "allow": [
+        "read"
+      ],
+      "otherwise": "approve",
+      "shell": true
+    },
+    "workspace-write": {
+      "allow": [
+        "read",
+        "write",
+        "delete",
+        "execute",
+        "network",
+        "unknown"
+      ],
+      "otherwise": "deny",
+      "shell": true
+    }
+  },
+  "shell": {
+    "destructive_programs": [
+      "rm",
+      "rmdir",
+      "unlink",
+      "shred",
+      "truncate",
+      "srm",
+      "wipe"
+    ],
+    "sensitive_variables": "(?i)(KEY|TOKEN|SECRET|PASSW|CREDENTIAL|AUTH|COOKIE|SESSION|PRIVATE|DSN|DATABASE_URL)"
+  },
+  "agents": {
+    "django-api-agent": {
+      "mode": "workspace-write",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    },
+    "django-architecture-agent": {
+      "mode": "workspace-write",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    },
+    "django-code-review-agent": {
+      "mode": "read-only",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    },
+    "django-documentation-agent": {
+      "mode": "documentation-only",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob"
+      ],
+      "deny": []
+    },
+    "django-model-agent": {
+      "mode": "workspace-write",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    },
+    "django-performance-agent": {
+      "mode": "workspace-write",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    },
+    "django-project-analyzer": {
+      "mode": "read-only",
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    },
+    "django-security-agent": {
+      "mode": "confirm-writes",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    },
+    "django-testing-agent": {
+      "mode": "workspace-write",
+      "tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "deny": []
+    }
+  }
+}

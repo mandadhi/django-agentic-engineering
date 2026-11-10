@@ -1,0 +1,31 @@
+{
+  "name": "django-engineering",
+  "version": "0.4.0",
+  "description": "Django Engineering Pack: nine Django agents, nine /django-* developer commands, twelve Django skills and twelve mandatory engineering rules, with output templates, shared references and a fail-closed security guard.",
+  "author": { "name": "Techwave Digital AI" },
+  "license": "UNLICENSED",
+  "keywords": ["django", "django-rest-framework", "python", "postgresql", "security", "testing", "performance", "architecture", "code-review", "documentation"],
+  "agents": [
+    "./agents/django-api-agent.md",
+    "./agents/django-architecture-agent.md",
+    "./agents/django-code-review-agent.md",
+    "./agents/django-documentation-agent.md",
+    "./agents/django-model-agent.md",
+    "./agents/django-performance-agent.md",
+    "./agents/django-project-analyzer.md",
+    "./agents/django-security-agent.md",
+    "./agents/django-testing-agent.md"
+  ],
+  "commands": [
+    "./commands/django-analyze.md",
+    "./commands/django-api.md",
+    "./commands/django-design.md",
+    "./commands/django-document.md",
+    "./commands/django-model.md",
+    "./commands/django-optimize.md",
+    "./commands/django-review.md",
+    "./commands/django-security.md",
+    "./commands/django-test.md"
+  ],
+  "skills": ["./skills/", "./rules/"]
+}

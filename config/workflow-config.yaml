@@ -1,0 +1,14 @@
+# Where workflow definitions live and the execution defaults a stage inherits
+# when it does not set its own value.
+schema_version: "1.0"
+kind: WorkflowConfig
+
+discovery:
+  definitions_dir: workflows
+  pattern: "*.workflow.yaml"
+
+defaults:
+  max_attempts: 2
+  stage_timeout_seconds: 1800
+  approval_required: false
+  checkpoint_policy: after_each_stage   # after_each_stage | manual

@@ -1,0 +1,25 @@
+[project]
+name = "django-agentic-engineering"
+version = "0.2.0"
+description = "Django agentic engineering harness: configuration, contracts, registry, context, execution state and agent execution through the Claude Agent SDK."
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6.0",
+    "jsonschema>=4.18",
+    "referencing>=0.30",
+    # Verified with 0.2.177 (bundled Claude Code CLI 2.1.317). <0.3: the adapter relies on
+    # AgentDefinition, HookMatcher.on_failure, ResultMessage.structured_output and the init frame.
+    "claude-agent-sdk>=0.2.177,<0.3",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+addopts = "-ra"
+markers = [
+    "integration: runs a real agent through the Claude Agent SDK (opt-in: DAE_SDK_INTEGRATION=1)",
+    "plugin_live: loads the Django Engineering Pack plugin with the installed Claude Code CLI (opt-in: DAE_PLUGIN_LIVE=1)",
+]

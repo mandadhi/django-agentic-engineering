@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/config/framework-config.schema.json",
+  "title": "FrameworkConfig",
+  "type": "object",
+  "required": ["schema_version", "kind", "framework", "paths", "configs", "storage"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "../contracts/common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "FrameworkConfig" },
+    "framework": {
+      "type": "object",
+      "required": ["name", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+([-+].*)?$" }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "required": ["repo_root", "contracts_dir", "artifacts_dir"],
+      "additionalProperties": false,
+      "properties": {
+        "repo_root": { "type": "string", "minLength": 1 },
+        "contracts_dir": { "type": "string", "minLength": 1 },
+        "artifacts_dir": { "type": "string", "minLength": 1 }
+      }
+    },
+    "configs": {
+      "type": "object",
+      "required": ["agent_registry", "skill_registry", "workflow", "evaluation", "security"],
+      "additionalProperties": false,
+      "properties": {
+        "agent_registry": { "type": "string", "minLength": 1 },
+        "skill_registry": { "type": "string", "minLength": 1 },
+        "workflow": { "type": "string", "minLength": 1 },
+        "evaluation": { "type": "string", "minLength": 1 },
+        "security": { "type": "string", "minLength": 1 }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "required": ["backend"],
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "enum": ["sqlite"] },
+        "sqlite": {
+          "type": "object",
+          "required": ["path"],
+          "additionalProperties": false,
+          "properties": { "path": { "type": "string", "minLength": 1 } }
+        },
+        "max_json_bytes": { "type": "integer", "minimum": 1024 }
+      },
+      "if": { "properties": { "backend": { "const": "sqlite" } } },
+      "then": { "required": ["sqlite"] }
+    },
+    "logging": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "level": { "enum": ["DEBUG", "INFO", "WARNING", "ERROR"] },
+        "format": { "enum": ["json", "text"] }
+      }
+    },
+    "agent_runtime": {
+      "type": "object",
+      "description": "Harness-level limits for one Agent SDK query (one workflow stage). Agent instructions, model and tools always come from the agent's Markdown.",
+      "additionalProperties": false,
+      "properties": {
+        "max_turns": { "type": "integer", "minimum": 1 },
+        "max_budget_usd": { "type": "number", "exclusiveMinimum": 0 },
+        "max_agent_seconds": { "type": "integer", "minimum": 1, "description": "Upper bound on any single agent execution; a stage's timeout_seconds can only lower it." },
+        "hook_timeout_seconds": { "type": "integer", "minimum": 1, "description": "Timeout of the harness PreToolUse/PostToolUse hooks (covers waiting for a human approval)." },
+        "structured_output": { "type": "boolean", "description": "Request the AgentResult as SDK structured output (--json-schema). When false, the JSON is parsed from the final text." }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "default_token_budget": { "type": "integer", "minimum": 1 },
+        "reserve_tokens": { "type": "integer", "minimum": 0 },
+        "chars_per_token": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    }
+  }
+}

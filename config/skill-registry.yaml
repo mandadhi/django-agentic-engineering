@@ -1,0 +1,209 @@
+# Skills agents may use. A skill is a directory with a SKILL.md, in the standard
+# Claude Code layout. `path` (relative to paths.repo_root, or to the plugin root when the
+# entry names its `plugin`) points to that directory; its description comes from SKILL.md
+# and `id` must equal SKILL.md's frontmatter `name`.
+# This registry adds only harness data (source, plugin, tags).
+#
+# Phase 1 reuses existing plugin skills; at run time the Agent SDK loads them with
+# the plugin (`plugins=[{"type": "local", "path": "plugins/<name>"}]`).
+# Since Phase 5 the Django skills and rules belong to the registered `django-engineering`
+# plugin (agent-registry `plugins`) and load the same way, from the canonical pack files.
+schema_version: "1.0"
+kind: SkillRegistry
+
+skills:
+  - id: owasp-top10-review
+    source: plugin
+    path: plugins/security/skills/owasp-top10-review
+    tags: [security, owasp]
+
+  - id: secret-detection-patterns
+    source: plugin
+    path: plugins/security/skills/secret-detection-patterns
+    tags: [security, secrets]
+
+  - id: security-scan-gates
+    source: plugin
+    path: plugins/security/skills/security-scan-gates
+    tags: [security, ci]
+
+  - id: db-schema-conventions
+    source: plugin
+    path: plugins/database/skills/db-schema-conventions
+    tags: [database, data-model]
+
+  - id: db-migration-playbook
+    source: plugin
+    path: plugins/database/skills/db-migration-playbook
+    tags: [database, migrations]
+
+  - id: api-design-standards
+    source: plugin
+    path: plugins/api/skills/api-design-standards
+    tags: [api]
+
+  - id: api-versioning-policy
+    source: plugin
+    path: plugins/api/skills/api-versioning-policy
+    tags: [api]
+
+  - id: pr-review-standards
+    source: plugin
+    path: plugins/pr-automation/skills/pr-review-standards
+    tags: [review]
+
+  - id: pr-diff-hygiene
+    source: plugin
+    path: plugins/pr-automation/skills/pr-diff-hygiene
+    tags: [review]
+
+  # Django Engineering Skills (plugin django-engineering, paths relative to the pack root).
+  # They link to the plugin skills above instead of repeating them. The SDK loads them as
+  # `django-engineering:<id>` for the Django agents that register them.
+  - id: django-core
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-core
+    tags: [django, settings, middleware]
+
+  - id: django-architecture
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-architecture
+    tags: [django, architecture]
+
+  - id: django-orm
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-orm
+    tags: [django, orm, migrations]
+
+  - id: django-rest-framework
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-rest-framework
+    tags: [django, drf]
+
+  - id: postgresql-engineering
+    source: plugin
+    plugin: django-engineering
+    path: skills/postgresql-engineering
+    tags: [django, postgresql, database]
+
+  - id: django-security-engineering
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-security-engineering
+    tags: [django, security]
+
+  - id: django-testing
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-testing
+    tags: [django, testing]
+
+  - id: django-performance
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-performance
+    tags: [django, performance, caching]
+
+  - id: django-frontend
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-frontend
+    tags: [django, templates, htmx]
+
+  - id: django-integrations
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-integrations
+    tags: [django, integrations, webhooks]
+
+  - id: django-data-processing
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-data-processing
+    tags: [django, data-processing, celery]
+
+  - id: django-report-generation
+    source: plugin
+    plugin: django-engineering
+    path: skills/django-report-generation
+    tags: [django, reporting]
+
+  # Django Engineering Rules (Phase 3C, plugin django-engineering). Mandatory standards in the same
+  # package format as skills (rules/<id>/SKILL.md), so agents receive them through the
+  # existing `skills:` mechanism. The `rule` tag tells them apart: by_tag("rule").
+  # No topic tags, so existing tag queries (api, security, ...) return what they did before.
+  - id: django-project-structure
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-project-structure
+    tags: [django, rule]
+
+  - id: django-coding-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-coding-standards
+    tags: [django, rule]
+
+  - id: django-model-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-model-standards
+    tags: [django, rule]
+
+  - id: django-api-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-api-standards
+    tags: [django, rule]
+
+  - id: django-security-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-security-standards
+    tags: [django, rule]
+
+  - id: django-database-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-database-standards
+    tags: [django, rule]
+
+  - id: django-testing-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-testing-standards
+    tags: [django, rule]
+
+  - id: django-performance-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-performance-standards
+    tags: [django, rule]
+
+  - id: django-configuration-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-configuration-standards
+    tags: [django, rule]
+
+  - id: django-logging-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-logging-standards
+    tags: [django, rule]
+
+  - id: django-documentation-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-documentation-standards
+    tags: [django, rule]
+
+  - id: django-dependency-standards
+    source: plugin
+    plugin: django-engineering
+    path: rules/django-dependency-standards
+    tags: [django, rule]

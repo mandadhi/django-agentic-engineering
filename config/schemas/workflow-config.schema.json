@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.techwave.com/django-agentic-engineering/config/workflow-config.schema.json",
+  "title": "WorkflowConfig",
+  "type": "object",
+  "required": ["schema_version", "kind", "discovery", "defaults"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "$ref": "../contracts/common.schema.json#/$defs/SchemaVersion" },
+    "kind": { "const": "WorkflowConfig" },
+    "discovery": {
+      "type": "object",
+      "required": ["definitions_dir"],
+      "additionalProperties": false,
+      "properties": {
+        "definitions_dir": { "type": "string", "minLength": 1 },
+        "pattern": { "type": "string", "minLength": 1, "default": "*.workflow.yaml" }
+      }
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "stage_timeout_seconds": { "type": "integer", "minimum": 1 },
+        "approval_required": { "type": "boolean" },
+        "checkpoint_policy": { "enum": ["after_each_stage", "manual"] }
+      }
+    }
+  }
+}
