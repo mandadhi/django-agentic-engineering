@@ -83,13 +83,17 @@ def split_skills_and_rules(registry: HarnessRegistry, agent_id: str) -> tuple[tu
 
 #: Phase 6: /orchestrate briefs the orchestrator, not a specialist (see tests/test_orchestration.py).
 ORCHESTRATE = "orchestrate"
+#: Phase 5.6: opt-in harness commands; they run the bootstrap script, not an agent
+#: (see tests/test_harness_bootstrap.py).
+HARNESS_COMMANDS = {"setup-harness", "harness-status", "enable-harness", "disable-harness", "doctor"}
 
 
 def test_all_nine_commands_discovered() -> None:
     files = {p.stem for p in COMMANDS_DIR.glob("*.md") if not p.stem.isupper()}     # skip README.md
-    assert files == set(EXPECTED) | {ORCHESTRATE}
+    assert files == set(EXPECTED) | {ORCHESTRATE} | HARNESS_COMMANDS
     assert {p.name for p in COMMANDS_DIR.iterdir()} == {f"{c}.md" for c in EXPECTED} | {f"{ORCHESTRATE}.md",
-                                                                                         "README.md"}
+                                                                                         "README.md"} | {
+        f"{c}.md" for c in HARNESS_COMMANDS}
 
 
 def test_readme_lists_every_command_with_its_agent() -> None:

@@ -885,7 +885,138 @@ The standalone Claude Code plugin is unaffected.
   lives inside a repository that has its own `.claude-plugin/marketplace.json`, that marketplace can
   list the plugin with a relative `source` pointing at this directory.
 
+## Repository-local harness (Phase 5.6)
+
+Users do not clone this repository to use the harness. In their own project they run
+`/django-engineering:setup-harness` in Claude Code; the plugin's bootstrap
+(`harness_bootstrap/`, standard library only) installs this harness *into that repository* and the
+plugin's `/orchestrate` then runs through it. The harness itself is unchanged: the same
+`core.cli`, `ExecutionManager`, `AgentRunner`, ToolGuard, approvals, checkpoints, SQLite store and
+RunRecords. Only two harness changes were needed, both described below: an optional
+`paths.enclave` and the workspace rule that goes with it.
+
+### Components
+
+| Module | Role |
+|---|---|
+| `harness_bootstrap/django_harness.py` | Entry point the plugin commands call: `python "${CLAUDE_PLUGIN_ROOT}/harness_bootstrap/django_harness.py" <subcommand>` |
+| `harness_bootstrap/project.py` | Project-root detection: Git work-tree root (`.git` directory or file), Django markers, existing installations; refuses home, filesystem roots, the Claude config directory and the plugin itself; asks when a monorepo makes it ambiguous |
+| `harness_bootstrap/mode.py` | The single execution-mode resolver (`standalone`, `harness_enabled`, `harness_disabled`, `harness_invalid`). Reads files only; never imports or starts the harness |
+| `harness_bootstrap/distribution.py` | The harness distribution shipped in the plugin, its SHA-256 digest, versioned runtime snapshots and their verification |
+| `harness_bootstrap/environment.py` | Read-only checks: Python 3.11+, venv/ensurepip, pip, disk, write permission, Windows path length, credentials (names only), OS sandbox |
+| `harness_bootstrap/provision.py` | Plan, consent binding (`plan_id`), idempotent setup, repair, upgrade, validation, enable, disable |
+| `harness_bootstrap/adapter.py` | Runtime adapter: plan, run, list, status, resume, approve, reject, cancel, result, each a `python -m core.cli` call of the repository's runtime |
+| `harness_bootstrap/probe.py` | Runs inside the repository's virtual environment: writes the repository configuration, opens the database through `runtime.store.open_store` (migrations), readiness, results |
+
+No MCP server is used. Every operation is a bounded command the plugin command runs through
+Claude Code's Bash tool (with Claude Code's own permission prompt), and a long-running execution
+is a background command. An MCP server would add a persistent process without adding a capability.
+
+### Layout and configuration
+
+```text
+<project>/.django-engineering/
+  installation.json                  manifest (schema 1): versions, relative paths, profile, state, history
+  .gitignore                         everything ignored except itself and config/framework-config.yaml
+  config/framework-config.yaml       derived once from the snapshot's canonical framework-config.yaml
+  runtime/<version>-<digest8>/       snapshot: core/ runtime/ agent_runtime/ config/ contracts/ workflows/
+                                     agents/ commands/ skills/ rules/ templates/ references/ hooks/
+                                     harness_bootstrap/ + plugin.json, standalone-security.yaml,
+                                     requirements-harness.txt, RUNTIME.json (SHA-256 of every file)
+  database/harness.db  database/backups/
+  artifacts/  logs/  .venv/
+```
+
+The adapter runs `<.venv python> -X utf8 -E -s -m core.cli --root runtime/<snapshot>
+--framework-file .django-engineering/config/framework-config.yaml --profile <profile> ...` with the
+snapshot as working directory, so the code, registries, policies and agents come from the
+snapshot, never from the plugin cache or `PYTHONPATH`. The repository configuration's relative
+paths resolve against the snapshot: `configs:` loads the canonical registries, security
+configuration and orchestration policy; `../../database/harness.db`, `../../artifacts` and
+`paths.enclave: ../..` point into `.django-engineering/`. The default profile is `pack`; `full`
+keeps its current behaviour and validation, and its optional parent-repository plugins are never
+copied (provide them under `.django-engineering/plugins/` if you need them).
+
+### Execution modes
+
+| Mode | When | `/orchestrate` |
+|---|---|---|
+| `standalone` | no `.django-engineering/installation.json` at or above the directory (up to the Git root) | standalone plugin, unchanged |
+| `harness_enabled` | `status: installed`, `enabled: true`, files present, project not moved, runtime version and digest equal to the plugin's distribution | the harness |
+| `harness_disabled` | `enabled: false` and `disabled_by_user: true` | standalone plugin; history kept |
+| `harness_invalid` | anything else: `setup-interrupted`, `setup-failed`, `manifest-unreadable`, `manifest-invalid`, `missing-file`, `missing-runtime`, `relocated`, `version-mismatch`, `runtime-drift` | stops with the problem and its remedy; never falls back |
+
+### Setup, repair and upgrade
+
+`plan` changes nothing and returns a `plan_id`, a digest of the project, its state, the
+distribution, the interpreter, the profile and every action. `setup --approve-plan <id>`
+recomputes the plan and refuses (exit 12) if the id differs. Then:
+
+1. lock (`.setup.lock`, exclusive), manifest `provisioning` with `enabled: false`;
+2. directories and `.gitignore` (only when absent);
+3. runtime snapshot: copied into a temporary sibling, verified, renamed; an existing snapshot is
+   verified and reused, never overwritten;
+4. virtual environment: created with `python -I -m venv` when absent, otherwise reused; never deleted;
+5. pinned dependencies: installed with `pip install -r requirements-harness.txt` from the snapshot,
+   only if not already satisfied, with `PIP_REQUIRE_VIRTUALENV=1` (output logged, URL credentials redacted);
+6. configuration: created only when absent;
+7. database: opened through the harness's own migrations; once a database existed it must still
+   exist (`--new-database` is the explicit way to start an empty history); an upgrade first copies
+   it to `database/backups/` with SQLite's backup API;
+8. validation: `core.cli validate` and the readiness probe (pinned versions, SDK import, registry,
+   orchestration policy, `paths.enclave`, database schema and integrity);
+9. manifest `installed`, enabled unless the user had disabled it.
+
+A failed step records `status: failed` and `last_error` (an upgrade keeps the previous runtime),
+an interruption leaves `provisioning`; the next setup resumes. Setup on a valid installation only
+validates. `--upgrade` is required whenever the plugin's distribution differs; a downgrade is refused.
+
+### Security in harness mode
+
+* **SEC-04 with an enclave.** `paths.enclave` is a protected root. `validate_workspace(...,
+  enclave=...)` accepts a workspace that contains protected roots only when it is exactly the
+  enclave's parent and every contained root lies inside the enclave; a workspace inside the
+  enclave, above the project, or containing any other protected root is still refused, and without
+  `paths.enclave` nothing changes. The ToolGuard already denies every path inside a protected root
+  except the run's output directory (writes) and the pack's read roots (reads).
+* **OS sandbox.** For sandboxed sessions (macOS, Linux) the runner adds native deny rules: `Read`
+  and `Edit` for the enclave's manifest, configuration, database and logs, and `Edit` for the runtime
+  snapshot and the virtual environment. `artifacts/` stays writable (it holds the run's output
+  directory), so a sandboxed command could change another run's artifacts; their SHA-256 is in the
+  database.
+* **Standalone guard.** `plugin_packaging/standalone-security.yaml` `protected_paths` adds
+  `**/.django-engineering` and `**/.django-engineering/**` to the guard's denied paths, so pack
+  agents in standalone mode (for example with the harness disabled) can neither read nor change the
+  installation.
+* **Approvals from Claude Code.** `run` and `resume` always pass `--approve deny`: a Bash call has no
+  terminal for the console approver. Tool calls that need approval are denied and recorded
+  (`result` lists them); stage approval gates wait (exit 3) for `execution approve <id> <stage>
+  --by <name>`, which the command runs only after the user approved in the conversation.
+* **Interpreter and paths.** The adapter only ever runs the layout's `.venv` interpreter with
+  `-E -s`; the manifest's paths must equal the layout's and stay inside `.django-engineering/`.
+  Nothing from the manifest or configuration is executed as a command. Interpreter probes run with
+  `-I`, so nothing in the project directory can shadow a module.
+
+### Tests
+
+`tests/test_harness_bootstrap.py` (56 tests) covers default standalone behaviour, detection, the
+resolver, setup (clean, repeated, plan binding, missing Python, missing venv/pip, pip failure with
+redaction, database failure, permission denial, interruption and resume, conflicts, adopted team
+configuration, missing database), upgrades (configuration, history and backups preserved, disabled
+state kept, no downgrade), enable/disable, the adapter, and harness execution from a
+repository-local installation: the existing engine and store, ToolGuard protection of the enclave,
+recorded approval denials, checkpoint and resume, sandbox deny rules, status and doctor. Setup
+tests simulate the virtual environment and pip; everything else runs for real.
+
 ## Known limitations
+
+- **Repository-local harness (Phase 5.6).** Approvals of individual tool calls are not available
+  from Claude Code (always denied and recorded; stage gates work). Upgrading reinstalls the pinned
+  packages in the existing virtual environment, so a failed upgrade can leave packages of the newer
+  version next to the previous runtime. A project moved to another path is reported as `relocated`
+  (the virtual environment holds absolute paths). The plugin's own interpreter must be called
+  `python`, `python3` or `py`. Verified end to end on Windows (Python 3.13); Linux and macOS are
+  covered by the offline tests only.
 
 - **Pre-existing content columns (unchanged by Phase 5.3).** These v1 columns still store
   documents:

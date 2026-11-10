@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import json
+import sys
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -166,7 +167,7 @@ class AgentRunner:
 
     def _workspace(self, value: str | Path) -> Path:
         """Canonical workspace; refused when it overlaps the trusted harness (SEC-04, fail closed)."""
-        return validate_workspace(value, self.protected_roots)
+        return validate_workspace(value, self.protected_roots, enclave=self.registry.config.framework.enclave)
 
     # ------------------------------------------------------------------ workflow loop
 
@@ -261,7 +262,8 @@ class AgentRunner:
                                 stderr=self._stderr, isolation=isolation, env=env,
                                 protected_read_deny=self._protected_read_deny(),
                                 # SEC-05: the OS sandbox also keeps a read-only agent's commands out of the workspace
-                                write_deny=[workspace] if write_mode and write_mode.mode == "read-only" else ())
+                                write_deny=[*([workspace] if write_mode and write_mode.mode == "read-only" else []),
+                                            *self._enclave_write_deny()])     # Phase 5.6: repository-local install
         prompt = render_task_prompt(run.task, workspace=workspace, artifact_dir=artifact_dir,
                                     resumed=resume_session is not None)
         self.manager.start_agent_run(run.run_id)
@@ -290,7 +292,34 @@ class AgentRunner:
                                     claude_config_dir()]
         for plugin in config.plugins:      # plugin manifests, hooks and security definitions
             paths += [plugin.path / ".claude-plugin", plugin.path / "hooks", plugin.agent_policy_path]
+        paths.append(config.sources.get("framework"))        # may live outside the root (repository-local install)
+        paths += self._enclave_children(keep=(config.framework.root, HARNESS_HOME, Path(sys.prefix), self.artifacts_root,
+                                              *(plugin.path for plugin in config.plugins)))
         return list(dict.fromkeys(Path(p).resolve() for p in paths if p is not None))
+
+    def _enclave_children(self, keep: Sequence[Path]) -> list[Path]:
+        """Entries of a repository-local installation (Phase 5.6) that hold none of ``keep``.
+
+        The enclave lies inside the workspace, which a sandboxed command may write. Native deny rules
+        for its entries keep the OS sandbox from reading or changing them; ``keep`` are the entries the
+        session needs (the runtime snapshot with the pack's read roots, the Python environment, the
+        artifacts area holding this run's output directory).
+        """
+        enclave = self.registry.config.framework.enclave
+        if enclave is None or not enclave.is_dir():
+            return []
+        kept = [Path(p).resolve() for p in keep]
+        return [child.resolve() for child in sorted(enclave.iterdir())
+                if not any(k == child.resolve() or child.resolve() in k.parents for k in kept)]
+
+    def _enclave_write_deny(self) -> list[Path]:
+        """Runtime snapshot and Python environment: readable, never writable by a sandboxed command."""
+        enclave = self.registry.config.framework.enclave
+        if enclave is None or not enclave.is_dir():
+            return []
+        artifacts = self.artifacts_root.resolve()
+        return [child.resolve() for child in sorted(enclave.iterdir())
+                if child.is_dir() and not (child.resolve() == artifacts or child.resolve() in artifacts.parents)]
 
     def _write_mode(self, agent: AgentSpec) -> AgentWriteMode | None:
         """The write mode the guard enforces: security-config ``write_mode`` and/or the plugin's

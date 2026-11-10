@@ -11,6 +11,14 @@ short names resolved, strictly) neither equals, contains nor lies inside any pro
 A path-prefix comparison of the raw strings is never used. Resolution errors refuse the
 workspace (fail closed).
 
+Repository-local installations (Phase 5.6): the plugin's opt-in setup can install the harness in a
+directory inside the project (framework-config ``paths.enclave``). That directory is
+itself a protected root, so nothing in it is reachable by an agent except the run's own output
+directory and the pack's read roots, exactly as before. The one relaxation: the project that
+*directly* contains the enclave may be the workspace even though it contains protected roots,
+provided every protected root it contains lies inside the enclave. A workspace inside the enclave,
+a parent of the project, or a project containing any other protected root is still refused.
+
 The per-call checks live in :class:`agent_runtime.security_hooks.ToolGuard`: every tool path is
 resolved the same way and must stay inside the workspace (or the run's own output directory,
 or a plugin read root for reads), and nothing inside a protected root is reachable except
@@ -59,6 +67,7 @@ def protected_roots(config: HarnessConfig, *, extra: Iterable[Path | None] = ())
     """Every directory or file that belongs to the trusted harness, never to an agent workspace."""
     framework = config.framework
     candidates: list[Path | None] = [
+        framework.enclave,                    # a repository-local installation as a whole (Phase 5.6)
         HARNESS_HOME,                         # the harness code and its shipped pack
         framework.root,                       # the configuration in use (may be a copy of HARNESS_HOME/config)
         *config.sources.values(),             # every configuration file
@@ -88,17 +97,29 @@ def _within(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
 
 
-def validate_workspace(value: str | Path, protected: Iterable[Path]) -> Path:
-    """The canonical workspace directory, or :class:`WorkspaceError` if it overlaps the harness."""
+def validate_workspace(value: str | Path, protected: Iterable[Path], *, enclave: Path | None = None) -> Path:
+    """The canonical workspace directory, or :class:`WorkspaceError` if it overlaps the harness.
+
+    ``enclave``: framework-config ``paths.enclave`` of a repository-local installation (see the module
+    docstring). It must itself be one of ``protected``; it never exempts any other root.
+    """
     path = canonical(value)
     if not path.is_dir():
         raise WorkspaceError(f"workspace is not a directory: {path}")
     if path.parent == path:
         raise WorkspaceError(f"a filesystem root cannot be a workspace: {path}")
+    protected = tuple(protected)
+    owner: Path | None = None
+    if enclave is not None:
+        enclave = _canonical_or_lexical(Path(enclave))
+        if any(os.path.normcase(str(_canonical_or_lexical(r))) == os.path.normcase(str(enclave)) for r in protected):
+            owner = enclave.parent
     for root in protected:
         if _within(path, root):
             raise WorkspaceError(f"workspace {path} lies inside the trusted harness area {root}; "
                                  "point the agent at the project directory instead")
+        if owner is not None and path == owner and enclave is not None and _within(root, enclave):
+            continue                          # the project that owns the repository-local installation
         if _within(root, path):
             raise WorkspaceError(f"workspace {path} contains the trusted harness area {root} "
                                  "(harness, configuration, database, plugins or credentials); "

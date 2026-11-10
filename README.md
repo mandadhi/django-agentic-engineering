@@ -12,8 +12,9 @@ references for [Claude Code](https://docs.claude.com/en/docs/claude-code), packa
 - [Architecture](#architecture)
 - [Installation](#installation)
 - [Orchestrator](#the-django-orchestrator) · [Agents](#available-agents) · [Commands](#available-commands) · [Skills and rules](#skills-and-rules)
+- [Two experiences: standalone plugin or Agentic Harness](#two-experiences)
 - [Requirements](#requirements)
-- [Harness setup](#harness-setup)
+- [Optional: Agentic Harness in your repository](#optional-agentic-harness-in-your-repository) · [Harness development setup](#harness-setup)
 - [Usage examples](#usage-examples)
 - [Security model](#security-model)
 - [Project structure](#project-structure)
@@ -64,6 +65,20 @@ plugin without ever installing or running the harness.
   - a ToolGuard with per-agent write modes, workspace isolation and secret redaction;
   - execution metadata and `RunRecord` persistence in SQLite.
 
+## Two experiences
+
+**Default: Standalone Plugin.** Install the plugin and use it immediately: the orchestrator, the
+nine specialists, the commands, skills, rules, templates, references and the security guard. No
+Python packages, no virtual environment, no database and no background process. This is what
+every repository gets until you decide otherwise.
+
+**Optional: Agentic Harness.** In a repository where you want persistent, recoverable executions,
+run `/django-engineering:setup-harness` in Claude Code. After you approve its plan it installs a
+repository-local runtime in `.django-engineering/` and enables it for that repository only. From
+then on `/orchestrate` there runs through the existing harness (workflow engine, ToolGuard,
+approvals, checkpoints, RunRecords); every other repository keeps the standalone plugin. You stay
+in Claude Code throughout. See [Optional: Agentic Harness in your repository](#optional-agentic-harness-in-your-repository).
+
 ## Architecture
 
 Both modes read the same canonical files: `agents/`, `skills/`, `rules/`, `commands/`,
@@ -85,7 +100,7 @@ Django Engineering Plugin  (.claude-plugin/plugin.json, repository root)
    +--> Agents        agents/*.md            9 specialist subagents, django-engineering:<id>
    +--> Skills        skills/*/SKILL.md      12, preloaded per agent
    +--> Rules         rules/*/SKILL.md       12, loaded as skills
-   +--> Commands      commands/*.md          10, /django-engineering:<command>
+   +--> Commands      commands/*.md          15, /django-engineering:<command> (5 manage the optional harness)
    +--> Templates     templates/             read at ${CLAUDE_PLUGIN_ROOT}/templates/
    +--> References    references/            read at ${CLAUDE_PLUGIN_ROOT}/references/
    +--> Standalone security hooks  hooks/hooks.json -> hooks/django_pack_guard.py
@@ -265,7 +280,17 @@ explicit `--apply` / `--fix` / `--scaffold`).
 | `/django-optimize` | `<slow endpoint, view, task or path> [--target <metric and goal>] [--apply]` | `django-performance-agent` | Baseline, propose, apply after approval, re-measure. |
 | `/django-document` | `<documents and audience> [--paths <code paths>] [--out <docs dir>] [--dry-run]` | `django-documentation-agent` | Generate or update documentation from the code. |
 | `/django-review` | `[--base <git ref>] [paths...] [--focus <areas>] [--threshold <severity>]` | `django-code-review-agent` | Read-only pre-merge review with a verdict. |
-| `/orchestrate` | `<what you want done> [--plan-only] [--category <id>]` | `django-orchestrator` | Routes the request to the relevant specialists and reports. |
+| `/orchestrate` | `<what you want done> [--plan-only] [--category <id>]` | `django-orchestrator` | Routes the request to the relevant specialists and reports. In a repository with the harness enabled, runs the same route through the harness. |
+
+Optional harness commands (no agent; see [Optional: Agentic Harness in your repository](#optional-agentic-harness-in-your-repository)):
+
+| Command | Arguments | Purpose |
+|---|---|---|
+| `/django-engineering:setup-harness` | `[--project <dir>] [--profile pack\|full] [--python <exe>] [--upgrade] [--new-database]` | Plan, approve, install, validate and enable the harness for this repository. |
+| `/django-engineering:harness-status` | `[--project <dir>]` | Execution mode, installation, versions, environment, database, readiness. |
+| `/django-engineering:enable-harness` | `[--project <dir>]` | Validate, then enable an existing installation. |
+| `/django-engineering:disable-harness` | `[--project <dir>]` | Back to the standalone plugin; runtime and history are kept. |
+| `/django-engineering:doctor` | `[--project <dir>] [--python <exe>]` | Read-only diagnosis with remedies (use the namespaced form; `/doctor` is Claude Code's). |
 
 Details and approval gates: [commands/README.md](commands/README.md).
 
@@ -315,13 +340,68 @@ database.
 | Parent repository plugins | `plugins/security`, `plugins/database`, `plugins/api`, `plugins/pr-automation`: **optional** integrations, not in this repository. Required by the default `full` profile; the `pack` profile excludes them explicitly. See [Harness setup](#harness-setup). |
 | OS sandbox for Bash | macOS, or Linux with `bwrap` and `socat`. Without one (for example on Windows), Bash is removed from harness sessions by default. |
 
+## Optional: Agentic Harness in your repository
+
+Everything happens in Claude Code, inside the Django project you are working on:
+
+```text
+/django-engineering:setup-harness        # detects the project, checks Python 3.11+, venv, pip, disk,
+                                          # path length and credentials, shows the plan; installs after you approve
+/django-engineering:harness-status       # standalone | harness_enabled | harness_disabled | harness_invalid
+/django-engineering:orchestrate Add a DRF endpoint for invoices with tests
+/django-engineering:disable-harness      # back to the standalone plugin; nothing is deleted
+/django-engineering:enable-harness       # validates, then turns it back on
+/django-engineering:doctor               # read-only diagnosis
+/django-engineering:setup-harness --upgrade   # after a plugin update: new runtime, same database and config
+```
+
+**What setup installs** (only after you approve the exact plan it shows; the plan id binds your
+approval, so anything that changes in between needs a new approval):
+
+```text
+<your project>/.django-engineering/
+  installation.json          manifest: versions, relative paths, state, history (no secrets)
+  .gitignore                 ignores everything here except itself and config/framework-config.yaml
+  config/framework-config.yaml   repository configuration, created once, never overwritten
+  runtime/<version>-<digest>/    read-only snapshot of the harness distribution shipped with the plugin
+  database/harness.db        SQLite execution history (the harness's own migrations); backups/ on upgrade
+  artifacts/  logs/          agent outputs; setup logs (credentials in URLs redacted)
+  .venv/                     the harness's own virtual environment with the pinned requirements-harness.txt
+```
+
+- Nothing is installed globally, and nothing goes into the Claude plugin cache. Setup never
+  overwrites a file, never deletes an environment or database and never installs optional
+  dependencies. Running it again validates and changes nothing.
+- The runtime snapshot is a byte-for-byte copy of the plugin's canonical agents, skills, rules,
+  templates, references, orchestration policy and security configuration, verified by SHA-256.
+  Both modes therefore use the same specialists and the same routing policy.
+- **Upgrades are explicit.** After a plugin update, `/orchestrate` reports the version mismatch
+  instead of running an old or a new runtime silently. `setup-harness --upgrade` provisions the new
+  snapshot, backs up and migrates the database, keeps your configuration and the previous snapshot.
+- **No silent fallback.** If the installation becomes invalid, `/orchestrate` stops and says why.
+  Fix it (`doctor`, `setup-harness`) or switch back explicitly (`disable-harness`).
+- **Per repository.** Activation lives in that repository's `.django-engineering/installation.json`;
+  there is no global switch.
+- **What to commit.** Nothing is committed for you. A team may commit
+  `.django-engineering/.gitignore` and `.django-engineering/config/framework-config.yaml` to share
+  configuration; each developer still runs `setup-harness` once. Everything else is machine-local.
+- **Requirements.** Python 3.11+ with `venv`/`ensurepip`, about 0.6 GB of disk (the Agent SDK
+  bundles the Claude Code CLI), and a Claude Code login or `ANTHROPIC_API_KEY` to run agents. On
+  Windows without long paths, the deepest installed file must fit 259 characters; the plan checks it.
+- **Installing from a staged bundle.** Bundles made with `python -m plugin_packaging stage` carry
+  only the standalone plugin; the harness commands then say so. Install from the repository
+  marketplace to use the harness.
+
+How it differs from the standalone plugin is in [Security model](#security-model) and
+[docs/harness.md](docs/harness.md#repository-local-harness-phase-56).
+
 ## Harness setup
 
-The harness is optional. It needs Python ≥ 3.11 and its own dependencies; the plugin does not.
-Nothing is installed when you install the plugin. Harness dependencies are installed only when
-you run the setup below and confirm.
+This section is for working **on this repository** (contributors). Users enable the harness in
+their own project with `/django-engineering:setup-harness` (above). The harness needs Python ≥ 3.11
+and its own dependencies; the plugin does not. Nothing is installed when you install the plugin.
 
-**Guided setup (recommended).** From a clone of this repository, with any Python ≥ 3.11:
+**Guided setup from a clone.** With any Python ≥ 3.11:
 
 ```bash
 python scripts/harness.py setup --profile pack     # shows the pinned packages, asks, installs into .venv
@@ -453,9 +533,9 @@ The plugin and the harness have **separate** security implementations. They shar
 | Agent execution | Claude Code subagents | Claude Agent SDK runtime (one query per stage, run as `dae-<id>`) |
 | Tool restrictions | Each agent's `tools` frontmatter, plus the plugin guard (`hooks/django_pack_guard.py`) | Effective tool set, native `permissions.deny`, PreToolUse ToolGuard |
 | Write modes (read-only, documentation-only, confirm-writes) | Enforced by the plugin guard | Enforced by the harness guard (stricter of `security-config.yaml` and the pack policy) |
-| Workspace boundaries | Guard: reads inside the project and the plugin, writes inside the project | Canonical-path workspace isolation; harness, config, database and plugins protected |
+| Workspace boundaries | Guard: reads inside the project and the plugin, writes inside the project; never `.django-engineering/` | Canonical-path workspace isolation; harness, config, database and plugins protected. A repository-local installation (`.django-engineering/`) is a protected area inside the project (only the run's output directory and the pack's read roots are reachable) |
 | Secret masking | PostToolUse masking (not for failed commands) | PostToolUse masking, plus redacted logs, results and artifacts |
-| Approval handling | Claude Code's own permission prompt (`ask`); refused in `-p` mode | Harness approver (`--approve deny` default, or `interactive`), bound to the exact call |
+| Approval handling | Claude Code's own permission prompt (`ask`); refused in `-p` mode | Harness approver (`--approve deny` default, or `interactive`), bound to the exact call. From Claude Code (`/orchestrate` in harness mode) tool-call approvals are always `deny` and recorded; stage approval gates wait for a named human via `execution approve` |
 | Audit log | Not provided | Every decision in the execution log |
 | Execution persistence | Not provided | SQLite: executions, stages, agent runs, RunRecords |
 | Orchestration of specialists | `django-orchestrator` (Claude Code delegation; the guard enforces its target allowlist; delegation count and retries are instructions only) | `core.cli orchestrate`: routes from the same policy, run by the workflow engine with enforced step limits |
@@ -483,7 +563,7 @@ Platform limitations:
 | Orchestrator | Yes, `django-orchestrator` (agent) | Yes, `core.cli orchestrate` (deterministic planner) |
 | Specialist agents | Yes, 9 | Yes, the same 9 files |
 | Skills and rules | Yes, preloaded per agent | Yes, injected per agent from the same registry |
-| User-facing commands | Yes, 10 slash commands | CLI (`core.cli`); slash commands are not used |
+| User-facing commands | Yes, 10 slash commands (+5 that manage the optional harness) | From Claude Code: `/orchestrate` once `setup-harness` enabled it; contributors: CLI (`core.cli`) |
 | Explicit workflow engine | No | Yes, `ExecutionManager` |
 | Controlled stage execution | Claude Code delegation behaviour | Harness execution manager, one SDK query per stage |
 | Harness ToolGuard | No (the plugin has its own, separate guard) | Yes |
@@ -570,6 +650,9 @@ allowlist), each agent's `skills:` line, the generated routing section of
 | Every tool call is blocked / "hook interpreter missing" | The guard could not start. Make sure a command named `python` (3.8+) is on `PATH`. On systems that ship only `python3`, provide `python`, for example with `python-is-python3`, a virtualenv or a symlink. The interpreter cannot be configured in the plugin. |
 | Bash is unavailable to agents on Windows | Install Git for Windows, or set `CLAUDE_CODE_GIT_BASH_PATH` to `...\Git\bin\bash.exe`. |
 | Harness: `directory not found: plugins/security` (`missing-path`) | An optional parent-repository plugin is missing. Provide the parent layout, or run with `--profile pack` to exclude the optional integrations explicitly; see [Harness setup](#harness-setup). The plugin is unaffected. |
+| `/orchestrate` says the harness is invalid | The repository's installation is incomplete, damaged or out of date with the plugin (`version-mismatch`, `runtime-drift`). Run `/django-engineering:doctor`; then `setup-harness` (repair) or `setup-harness --upgrade`, or `disable-harness` to use the standalone plugin. It never falls back on its own. |
+| `setup-harness` is blocked by `path-length` (Windows) | Enable Windows long paths (`LongPathsEnabled`) or use a project with a shorter path; the plan says how many characters too long it is. |
+| `setup-harness` fails at `dependencies` | pip could not install the pinned packages (network, index, proxy). The log in `.django-engineering/logs/` has pip's output with URL credentials redacted. Fix the cause and run setup again; it resumes. |
 | Harness: `CANNOT ROUTE [ambiguous]` / `[unclassified]` | The task fits several orchestration categories equally, or none. Re-run with `--category <id>` (the error lists the candidates). |
 | `/orchestrate` returns a ROUTING PLAN | The orchestrator could not spawn subagents where it ran. The command then runs the plan from the main session; or start Claude Code with `claude --agent django-engineering:django-orchestrator`. |
 | Harness: session shows agent `dae-<id>` instead of `<id>` | Expected. The harness runs its definition as `dae-<id>` so that the plugin's same-named agent file cannot replace it. Records, logs and results keep the logical id; `sdk_metadata.session_agent` holds the session name. |

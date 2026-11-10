@@ -13,7 +13,21 @@ htmlcov/
 # Runtime state: execution database and generated artifacts.
 var/
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
+
+# Repository-local harness (Phase 5.6, /django-engineering:setup-harness): virtual environment,
+# runtime snapshot, execution database, logs and temporary setup files are machine-local. A team
+# may commit .django-engineering/config/framework-config.yaml (the installation's own .gitignore
+# already allows exactly that in target projects).
+.django-engineering/*
+!.django-engineering/.gitignore
+!.django-engineering/config/
+.django-engineering/config/*
+!.django-engineering/config/framework-config.yaml
+*.log
+.setup.lock
 
 # Secrets and local environment
 .env

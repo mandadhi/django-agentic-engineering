@@ -32,6 +32,24 @@ result. How the work is done stays in the agent; Django knowledge stays in the s
 spawn subagents where it runs, it returns a ROUTING PLAN. The command then has the main session
 run that plan with the same limits (see [docs/orchestration.md](../docs/orchestration.md)).
 
+## Optional Agentic Harness commands (Phase 5.6)
+
+These commands manage the opt-in, repository-local Agentic Harness. None of them is needed for
+the standalone plugin, and none runs an agent. They call the plugin's bootstrap script
+(`harness_bootstrap/django_harness.py`, standard library only).
+
+| Command | What it does | Changes the repository |
+|---|---|---|
+| [/django-engineering:setup-harness](setup-harness.md) | detect the project, check the environment, show a plan; after approval install `.django-engineering/`, validate, enable | only after you approve the exact plan |
+| [/django-engineering:harness-status](harness-status.md) | execution mode, installation, versions, Python environment, database, profile, readiness | never |
+| [/django-engineering:enable-harness](enable-harness.md) | validate the installation, then enable it for this repository | the manifest, after validation |
+| [/django-engineering:disable-harness](disable-harness.md) | return this repository to the standalone plugin; runtime and history are kept | the manifest only |
+| [/django-engineering:doctor](doctor.md) | read-only diagnosis with a remedy for every problem | never |
+
+`/orchestrate` asks the execution-mode resolver first: standalone (no installation, or disabled)
+works exactly as before; an enabled harness runs the same routing policy through the harness; an
+invalid installation is reported and never bypassed. See [docs/harness.md](../docs/harness.md#repository-local-harness-phase-56).
+
 ## Output templates (Phase 3E)
 
 Each command's Expected output section names the [output templates](../templates/README.md) its

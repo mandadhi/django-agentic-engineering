@@ -142,6 +142,25 @@ with `dae.orchestration` (category, agents, policy version), so `execution statu
 `invalid-selection`, `missing-implementation`, `too-many-steps`); otherwise those of
 `execution start`.
 
+## Execution mode resolution (Phase 5.6)
+
+`/orchestrate` first asks the plugin's execution-mode resolver
+(`harness_bootstrap/django_harness.py mode --json`) which mode the current repository is in:
+
+| Mode | Route executed by |
+|---|---|
+| `standalone` (no installation) or `harness_disabled` | the standalone plugin, exactly as described above |
+| `harness_enabled` | the harness: `orchestrate plan`, then `orchestrate run` of the repository's own runtime, then `result` |
+| `harness_invalid` | nobody: the command reports the problem and its remedy and stops |
+
+Both modes consume the same `config/orchestration-policy.yaml` and the same specialist files: the
+repository's runtime snapshot is a verified, byte-for-byte copy of the plugin's distribution, and
+a snapshot that differs from the plugin (`version-mismatch`, `runtime-drift`) makes the mode
+invalid until the user upgrades or disables it. The harness classifies deterministically, so a
+request the orchestrator agent would route by judgement can come back as `ambiguous` or
+`unclassified`; the command then asks the user for `--category`. A failed harness execution is
+never retried in standalone mode. See [harness.md](harness.md#repository-local-harness-phase-56).
+
 ## Harness setup and profiles
 
 The guided launcher uses only the standard library. Running it with no Python packages installed

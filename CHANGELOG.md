@@ -9,6 +9,46 @@ Component versions are independent:
 
 ## [Unreleased]
 
+### Phase 5.6: opt-in repository-local Agentic Harness
+
+Plugin `0.5.0` → `0.6.0`. Harness package and framework configuration unchanged. Not released or tagged.
+
+#### Added
+- `/django-engineering:setup-harness`: detects the project, checks the environment, shows a plan
+  and, only after the user approves that exact plan (`plan_id`), installs the existing harness into
+  `<project>/.django-engineering/` (versioned runtime snapshot, own virtual environment with the
+  pinned requirements, repository configuration, SQLite database through the existing migrations,
+  manifest), validates it and enables it for that repository. Idempotent, resumable, explicit
+  upgrades (`--upgrade`) with database backup; never overwrites, deletes or installs globally.
+- `/django-engineering:harness-status`, `enable-harness`, `disable-harness`, `doctor`.
+- `harness_bootstrap/`: project detection, the single execution-mode resolver (`standalone`,
+  `harness_enabled`, `harness_disabled`, `harness_invalid`), distribution snapshots, environment
+  checks, provisioning, and a runtime adapter that delegates every operation to `python -m core.cli`
+  of the repository's runtime. Standard library only (except the in-environment probe).
+- framework-config `paths.enclave` (optional, schema updated): marks a repository-local
+  installation as a protected root.
+- `tests/test_harness_bootstrap.py` (56 tests).
+
+#### Changed
+- `/orchestrate` resolves the execution mode first. Standalone and disabled repositories behave as
+  before; an enabled harness runs the same route through the harness; an invalid installation is
+  reported and never bypassed.
+- `agent_runtime/workspace.py`: a workspace may contain protected roots only when it is exactly the
+  parent of `paths.enclave` and every contained root lies inside it. Without `paths.enclave`
+  nothing changes.
+- `agent_runtime/runner.py`: sandboxed sessions get native Read/Edit deny rules for the enclave's
+  manifest, configuration, database and logs, and Edit deny rules for its runtime and environment.
+- `plugin_packaging/standalone-security.yaml`: `protected_paths` (`.django-engineering`), appended
+  to the standalone guard's denied paths. `hooks/security-policy.json` regenerated.
+- `plugin_packaging stage` also exports `harness_bootstrap/`; staged bundles still carry no harness.
+- `plugin.json`: 15 commands; `EXPECTED_COUNTS["commands"]` 15.
+- `.gitignore`: repository-local harness state.
+
+#### Not changed
+- Specialist agents, skills, rules, templates, references, the orchestration policy, the security
+  configuration, ExecutionManager, AgentRunner, ToolGuard, approvals, checkpoints, the database
+  schema and the RunRecord contract.
+
 ### Phase 6: dual orchestration and simpler harness setup
 
 Plugin `0.4.0` → `0.5.0`; harness package `0.2.0` → `0.3.0`. Not released or tagged.

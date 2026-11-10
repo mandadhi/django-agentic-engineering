@@ -157,7 +157,10 @@ def test_readmes_are_never_loaded_as_components() -> None:
 
 def test_command_discovery() -> None:
     listed = [Path(p).stem for p in manifest()["commands"]]
-    assert sorted(c for c in listed if c != "orchestrate") == COMMAND_IDS and len(listed) == 10   # + /orchestrate
+    # Phase 5.6: + /orchestrate and the five opt-in harness commands
+    harness = {"setup-harness", "harness-status", "enable-harness", "disable-harness", "doctor"}
+    assert sorted(c for c in listed if c != "orchestrate" and c not in harness) == COMMAND_IDS
+    assert harness <= set(listed) and len(listed) == 15
 
 
 def test_skill_discovery(registry: HarnessRegistry) -> None:
@@ -521,7 +524,11 @@ def test_harness_security_configuration_is_unchanged() -> None:
         "network-access", "recursive-delete", "git-history-rewrite", "database-destructive", "privilege-or-system"]
     # The plugin policy reuses it verbatim.
     data = policy()
-    assert data["paths_deny"] == security["paths"]["deny"] and data["tools_deny"] == security["tools"]["deny"]
+    # security-config's denied paths as-is, then (Phase 5.6) the standalone-only protected installation paths
+    standalone = yaml.safe_load((ROOT / "plugin_packaging" / "standalone-security.yaml").read_text(encoding="utf-8"))
+    assert standalone["protected_paths"] == ["**/.django-engineering", "**/.django-engineering/**"]
+    assert data["paths_deny"] == security["paths"]["deny"] + standalone["protected_paths"]
+    assert data["tools_deny"] == security["tools"]["deny"]
     assert [r["regex"] for r in data["commands_deny"]] == [r["regex"] for r in security["commands"]["deny"]]
 
 

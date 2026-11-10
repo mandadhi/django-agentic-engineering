@@ -52,8 +52,9 @@ ORCHESTRATION_POLICY = Path("config/orchestration-policy.yaml")
 
 #: Plugin component folders, as declared in plugin.json (Claude Code also scans skills/ by default).
 SKILL_DIRS = ("skills", "rules")
-#: Nine specialists plus the orchestrator; nine specialist commands plus /orchestrate.
-EXPECTED_COUNTS = {"agents": 10, "commands": 10, "skills": 12, "rules": 12}
+#: Nine specialists plus the orchestrator; nine specialist commands plus /orchestrate and the five opt-in
+#: harness commands (Phase 5.6: setup-harness, harness-status, enable-harness, disable-harness, doctor).
+EXPECTED_COUNTS = {"agents": 10, "commands": 15, "skills": 12, "rules": 12}
 WRITE_MODES = {"read-only", "documentation-only", "confirm-writes", "workspace-write"}
 #: Strictest first (same order as core.plugin_policy.MODE_ORDER): a mode security-config assigns to a
 #: pack agent can only make the standalone mode stricter.
@@ -203,7 +204,9 @@ def build_policy(root: Path = PACK_ROOT) -> dict[str, Any]:
         "schema_version": "1.0",
         "plugin": PLUGIN_NAME,
         "tools_deny": list(security.get("tools", {}).get("deny", [])),
-        "paths_deny": list(security.get("paths", {}).get("deny", [])),
+        # security-config's denied paths, then the standalone-only protected paths (Phase 5.6)
+        "paths_deny": list(security.get("paths", {}).get("deny", [])) + [
+            p for p in standalone.get("protected_paths", []) if p not in security.get("paths", {}).get("deny", [])],
         "commands_deny": [_rule(r) for r in commands.get("deny", [])],
         "commands_require_approval": [_rule(r) for r in commands.get("require_approval", [])],
         "secret_patterns": [{"id": p["id"], "regex": p["regex"]} for p in security.get("secrets", {}).get("patterns", [])],
@@ -418,8 +421,10 @@ def structure_problems(root: Path = PACK_ROOT) -> list[str]:
 # ---------------------------------------------------------------------- staging (installable bundle)
 
 #: What an installed plugin needs at run time. Everything else (the Python harness, tests,
-#: config, .venv, var/, local settings) stays out of the bundle.
-STAGE_DIRS = ("agents", "commands", "skills", "rules", "templates", "references")
+#: config, .venv, var/, local settings) stays out of the bundle. harness_bootstrap/ (Phase 5.6,
+#: standard library only) backs the harness commands; in a staged bundle they report that the
+#: harness distribution is not included instead of failing obscurely.
+STAGE_DIRS = ("agents", "commands", "skills", "rules", "templates", "references", "harness_bootstrap")
 STAGE_FILES = (MANIFEST, HOOKS_FILE, GUARD_FILE, SHELL_SYNTAX_COPY, POLICY_FILE, Path("hooks/README.md"),
                Path("README.md"))
 STAGE_RECORD = "STAGED-FROM.json"

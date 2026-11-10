@@ -48,6 +48,16 @@ orchestrator:
   id: django-orchestrator
   mode: read-only
 
+# Phase 5.6: a repository-local harness installation (/django-engineering:setup-harness) lives in
+# <project>/.django-engineering: its runtime, security configuration, execution database and
+# virtual environment. Pack agents never read or change it in standalone mode (a disabled harness
+# keeps it), so a standalone session cannot weaken the harness for a later harness-mode run.
+# Appended to the denied path globs of hooks/security-policy.json; standalone guard only (the
+# harness protects the same directory as a trusted root, framework-config paths.enclave).
+protected_paths:
+  - "**/.django-engineering"
+  - "**/.django-engineering/**"
+
 # Paths (relative to the project directory) the documentation agent may write. These follow
 # agents/django-documentation-agent.md ("docs/, README*, *.md") plus the documentation formats
 # and tool configs it names (Sphinx, MkDocs). Plain *.txt is excluded: requirements*.txt is code.

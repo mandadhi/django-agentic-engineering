@@ -33,6 +33,23 @@ The orchestrator chooses the smallest set of specialists from the routing policy
 
 With no request, ask what to do. Do not guess.
 
+## Execution mode
+
+Before routing, ask the plugin's execution-mode resolver which mode this repository is in. It
+only reads `.django-engineering/installation.json`; it never starts or installs the harness:
+
+```
+python "${CLAUDE_PLUGIN_ROOT}/harness_bootstrap/django_harness.py" mode --json
+```
+
+- `standalone` or `harness_disabled`: continue with *Agent* below (standalone plugin, unchanged).
+- `harness_enabled`: follow *Harness mode* instead.
+- `harness_invalid` (exit 13): stop. Report each problem and its remedy (`/django-engineering:doctor`,
+  `setup-harness`, or `disable-harness` to use the standalone plugin). Do not fall back to
+  standalone execution: the user enabled the harness for this repository.
+- The resolver cannot run (no Python): use standalone mode only if
+  `.django-engineering/installation.json` does not exist in the project; otherwise report the problem.
+
 ## Agent
 
 Delegate to the `django-orchestrator` subagent with the request, the arguments and any attached
@@ -53,6 +70,32 @@ instead of results. Then the main session executes that plan:
 Delegate only to the nine Django specialists. Never invoke `django-orchestrator` again for the
 same request.
 
+## Harness mode
+
+The same routing policy and the same canonical specialist definitions, executed by the existing
+harness from the repository's own runtime. Run every call as
+`python "${CLAUDE_PLUGIN_ROOT}/harness_bootstrap/django_harness.py" <subcommand>`, passing the request
+on standard input with a quoted heredoc so it is never interpreted by the shell:
+
+```
+... orchestrate plan --task-stdin [--category <id>] <<'DJANGO_HARNESS_TASK'
+<the request, verbatim>
+DJANGO_HARNESS_TASK
+```
+
+1. `orchestrate plan`: show the route. On `CANNOT ROUTE` (ambiguous or unclassified), show the
+   candidate categories and ask the user to choose; never pick one yourself. With `--plan-only`, stop.
+2. `orchestrate run` with the same arguments, as a background command; wait for it to finish.
+3. `result <execution id>`: relay each stage's status, summary and outputs, and every guard decision
+   (denied tool calls and approval requests).
+4. Exit 3 (a stage awaits approval): show what waits and ask the user. Only on their explicit
+   approval run `execution approve <id> <stage> --by "<their name>"`, then `execution resume <id>`;
+   on rejection `execution reject <id> <stage> --by "<their name>" --reason "<why>"`.
+5. Exit 130 or an interrupted run: `execution resume <id>` recovers from the last checkpoint.
+
+Any other failure is reported as it is. Never retry a failed harness execution in standalone mode
+and never run the specialists yourself in its place.
+
 ## Skills and rules
 
 The orchestrator preloads `django-security-standards`. Each specialist preloads its own
@@ -69,7 +112,8 @@ production-affecting operations need your explicit approval.
 
 ## Steps
 
-1. If the request is empty, ask for it.
+1. If the request is empty, ask for it. Resolve the execution mode; in harness mode follow
+   *Harness mode* and skip steps 2 and 3.
 2. Brief `django-orchestrator`:
    - **Objective:** the request, verbatim.
    - **Constraints:** `--plan-only` and `--category` if given; any limits the user stated.
@@ -87,6 +131,7 @@ unresolved issues and recommended follow-up commands. With `--plan-only`: the ro
 
 ## Completion criteria
 
+- [ ] The execution mode came from the resolver; an invalid harness was reported, not bypassed.
 - [ ] The route came from the routing policy, and the report says why each specialist was used.
 - [ ] Every routed step ran, or is reported as skipped or failed with the reason.
 - [ ] No test or check is reported as passing unless it was run.

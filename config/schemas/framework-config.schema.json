@@ -24,7 +24,8 @@
       "properties": {
         "repo_root": { "type": "string", "minLength": 1 },
         "contracts_dir": { "type": "string", "minLength": 1 },
-        "artifacts_dir": { "type": "string", "minLength": 1 }
+        "artifacts_dir": { "type": "string", "minLength": 1 },
+        "enclave": { "type": "string", "minLength": 1, "description": "Optional (Phase 5.6): the repository-local installation directory (<project>/.django-engineering) holding this harness inside the project. It is a protected root; only the project that directly contains it may be a workspace." }
       }
     },
     "configs": {

@@ -178,6 +178,15 @@ claude plugin marketplace add ../django-engineering-plugin
 claude plugin install django-engineering@django-engineering-pack
 ```
 
+**Optional harness (Phase 5.6).** The plugin installed from the repository marketplace also
+carries the harness distribution, inert until a user runs `/django-engineering:setup-harness` in a
+project. Five commands manage it (`setup-harness`, `harness-status`, `enable-harness`,
+`disable-harness`, `doctor`); none runs at installation or on its own, and none is needed for the
+standalone plugin. A staged bundle ships the bootstrap (`harness_bootstrap/`) but not the harness, so
+those commands report that the distribution is missing. The guard denies pack agents every path in
+`.django-engineering/` (`protected_paths` in `plugin_packaging/standalone-security.yaml`). See
+[harness.md](harness.md#repository-local-harness-phase-56).
+
 **Confirm what loaded:**
 
 | Check | How |

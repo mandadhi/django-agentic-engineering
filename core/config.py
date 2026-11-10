@@ -313,6 +313,11 @@ class FrameworkConfig:
     logging: LoggingSettings
     context: ContextSettings
     agent_runtime: AgentRuntimeSettings = field(default_factory=AgentRuntimeSettings)
+    #: Phase 5.6: a repository-local installation directory inside the project that holds this
+    #: harness's runtime, configuration, database and environment inside the project. Protected like
+    #: every other trusted root; the project that directly contains it may still be the workspace
+    #: (agent_runtime.workspace.validate_workspace). None: no repository-local installation.
+    enclave: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -461,6 +466,7 @@ def _framework(doc: Mapping[str, Any], root: Path) -> FrameworkConfig:
         logging=LoggingSettings(**logcfg),
         context=ContextSettings(**ctx),
         agent_runtime=AgentRuntimeSettings(**runtime),
+        enclave=_resolve(root, paths["enclave"]) if paths.get("enclave") else None,
     )
 
 
